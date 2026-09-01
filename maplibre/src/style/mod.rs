@@ -25,6 +25,7 @@ use csscolorparser::Color;
 use serde::{Deserialize, Serialize};
 
 pub mod layer;
+pub mod sky;
 pub mod source;
 
 use crate::{
@@ -54,6 +55,8 @@ pub struct Style {
     pub pitch: Option<f64>,
     #[serde(default)]
     pub projection: Option<ProjectionSpecification>,
+    #[serde(default)]
+    pub sky: Option<sky::SkySpecification>,
 }
 
 /// Default style for https://openmaptiles.org/schema/
@@ -85,6 +88,7 @@ impl Default for Style {
             center: Some([50.85045, 4.34878]),
             pitch: Some(0.0),
             projection: None,
+            sky: None,
             zoom: Some(13.0),
             layers: vec![
                 StyleLayer {
