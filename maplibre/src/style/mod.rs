@@ -27,12 +27,15 @@ use serde::{Deserialize, Serialize};
 pub mod layer;
 pub mod source;
 
-use crate::style::{
-    layer::{
-        BackgroundPaint, FillPaint, LayerPaint, LinePaint, RasterPaint, StyleLayer, StyleProperty,
-        SymbolPaint,
+use crate::{
+    projection::ProjectionSpecification,
+    style::{
+        layer::{
+            BackgroundPaint, FillPaint, LayerPaint, LinePaint, RasterPaint, StyleLayer,
+            StyleProperty, SymbolPaint,
+        },
+        source::Source,
     },
-    source::Source,
 };
 
 /// Stores the style for a multi-layered map.
@@ -49,6 +52,8 @@ pub struct Style {
     pub center: Option<[f64; 2]>, // TODO: Use LatLon type here
     pub zoom: Option<f64>,
     pub pitch: Option<f64>,
+    #[serde(default)]
+    pub projection: Option<ProjectionSpecification>,
 }
 
 /// Default style for https://openmaptiles.org/schema/
@@ -79,6 +84,7 @@ impl Default for Style {
             sources: Default::default(),
             center: Some([50.85045, 4.34878]),
             pitch: Some(0.0),
+            projection: None,
             zoom: Some(13.0),
             layers: vec![
                 StyleLayer {
