@@ -314,7 +314,11 @@ pub fn process_vector_tile<T: VectorTransferables, C: Context>(
     let mut index = IndexProcessor::new();
 
     for layer in &mut tile.layers {
-        layer.process(&mut index).unwrap();
+        // A layer that the index cannot decode still rendered above; losing its query index is
+        // better than losing the worker.
+        if let Err(error) = layer.process(&mut index) {
+            tracing::warn!(%coords, layer = %layer.name, ?error, "skipping query index for layer");
+        }
     }
 
     context.layer_indexing_finished(&tile_request.coords, index.get_geometries())?;
