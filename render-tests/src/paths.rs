@@ -23,6 +23,13 @@ pub(super) fn local_tile_path(template: &str, coords: WorldTileCoords) -> Result
     Ok(PathBuf::from("render-tests/src/assets/tiles").join(relative))
 }
 
+pub(super) fn local_data_path(url: &str) -> Result<PathBuf, String> {
+    let relative = url
+        .strip_prefix("local://data/")
+        .ok_or_else(|| format!("Unsupported GeoJSON URL in render harness: {url}"))?;
+    Ok(PathBuf::from("render-tests/src/assets/data").join(relative))
+}
+
 pub(super) fn collect_tests(test_root: &std::path::Path) -> Vec<PathBuf> {
     let mut tests = walkdir::WalkDir::new(test_root)
         .min_depth(1)
