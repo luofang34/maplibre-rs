@@ -96,7 +96,10 @@ impl Shader for TileMaskShader {
         };
         VertexState {
             source: if self.debug_lines {
-                include_str!("tile_debug.vertex.wgsl")
+                concat!(
+                    include_str!("projection.vertex.wgsl"),
+                    include_str!("tile_debug.vertex.wgsl")
+                )
             } else {
                 concat!(
                     include_str!("projection.vertex.wgsl"),
@@ -110,11 +113,7 @@ impl Shader for TileMaskShader {
 
     fn describe_fragment(&self) -> FragmentState {
         FragmentState {
-            source: if self.debug_lines {
-                include_str!("basic.fragment.wgsl")
-            } else {
-                include_str!("tile_mask.fragment.wgsl")
-            },
+            source: include_str!("tile_mask.fragment.wgsl"),
             entry_point: "main",
             targets: vec![Some(wgpu::ColorTargetState {
                 format: self.format,
