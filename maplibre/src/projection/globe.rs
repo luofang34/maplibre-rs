@@ -15,10 +15,14 @@ pub mod tile_mesh;
 
 /// Mean Earth radius used to convert elevation in metres to globe radius.
 pub const EARTH_RADIUS_METERS: f64 = 6_371_008.8;
-const GLOBE_TRANSITION_START_ZOOM: f64 = 10.0;
+/// GL JS implements the `globe` preset as a blend from vertical perspective at zoom 11 to
+/// Mercator at zoom 12, and its render goldens at zoom 11 expect a full globe. The style
+/// specification's documentation shows the same blend starting at zoom 10; the renderer follows
+/// the implementation and its goldens.
+const GLOBE_TRANSITION_START_ZOOM: f64 = 11.0;
 const GLOBE_TRANSITION_END_ZOOM: f64 = 12.0;
 
-/// Returns the GL JS globe shorthand's vertical-perspective weight.
+/// Returns the `globe` preset's vertical-perspective weight at a continuous zoom.
 pub fn transition_for_zoom(zoom: f64) -> f32 {
     if !zoom.is_finite() {
         return 0.0;
