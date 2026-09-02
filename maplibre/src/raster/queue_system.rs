@@ -51,7 +51,9 @@ pub fn queue_system(
             {
                 return;
             }
-            for style_layer in style.layers.iter().filter(|layer| layer.type_ == "raster") {
+            for style_layer in style.layers.iter().filter(|layer| {
+                layer.type_ == "raster" && layer.is_visible_at(view_state.zoom().value())
+            }) {
                 let mut masks = Vec::with_capacity(2);
                 if uses_globe {
                     masks.push(TileMaskItem {

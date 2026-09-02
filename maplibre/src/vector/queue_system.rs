@@ -41,11 +41,11 @@ pub fn queue_system(
     };
 
     let buffer_pool_index = buffer_pool.index();
-    let uses_globe = style.projection.as_ref().is_some_and(|specification| {
-        specification
-            .projection_type
-            .uses_globe_rendering(view_state.zoom().value())
-    });
+    let zoom = view_state.zoom().value();
+    let uses_globe = style
+        .projection
+        .as_ref()
+        .is_some_and(|specification| specification.projection_type.uses_globe_rendering(zoom));
 
     for view_tile in tile_view_pattern.iter() {
         let coords = &view_tile.coords();
@@ -68,6 +68,9 @@ pub fn queue_system(
 
             if let Some(layer_entries) = buffer_pool_index.get_layers(source_shape.coords()) {
                 for layer_entry in layer_entries {
+                    if !layer_entry.style_layer.is_visible_at(zoom) {
+                        continue;
+                    }
                     // Choose fill vs line pipeline based on layer type
                     let is_line = layer_entry.style_layer.type_ == "line";
                     let draw_function: Box<dyn crate::render::render_phase::Draw<LayerItem>> =

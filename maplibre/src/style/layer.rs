@@ -413,6 +413,16 @@ pub struct StyleLayer {
     pub source_layer: Option<String>,
 }
 
+impl StyleLayer {
+    /// Returns whether the layer is drawn at a continuous zoom, using the style-spec rule that
+    /// `minzoom` is inclusive and `maxzoom` exclusive.
+    pub fn is_visible_at(&self, zoom: f64) -> bool {
+        self.minzoom
+            .is_none_or(|minzoom| zoom >= f64::from(minzoom))
+            && self.maxzoom.is_none_or(|maxzoom| zoom < f64::from(maxzoom))
+    }
+}
+
 impl Serialize for StyleLayer {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -592,6 +602,32 @@ impl Default for StyleLayer {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn zoom_range_is_min_inclusive_max_exclusive() {
+        let mut layer = super::StyleLayer {
+            index: 0,
+            id: "labels".to_string(),
+            type_: "symbol".to_string(),
+            filter: None,
+            maxzoom: Some(6),
+            minzoom: Some(2),
+            metadata: None,
+            paint: None,
+            source: None,
+            source_layer: None,
+        };
+
+        assert!(!layer.is_visible_at(1.99));
+        assert!(layer.is_visible_at(2.0));
+        assert!(layer.is_visible_at(5.99));
+        assert!(!layer.is_visible_at(6.0));
+
+        layer.minzoom = None;
+        layer.maxzoom = None;
+        assert!(layer.is_visible_at(0.0));
+        assert!(layer.is_visible_at(24.0));
+    }
+
     use super::*;
 
     #[test]
