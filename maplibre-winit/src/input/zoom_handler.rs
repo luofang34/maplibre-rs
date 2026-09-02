@@ -4,7 +4,10 @@ use cgmath::Vector2;
 use maplibre::{context::MapContext, coords::Zoom};
 use winit::keyboard::Key;
 
-use super::{projection::zoom_globe_around_pixel, UpdateState};
+use super::{
+    projection::{center_pixel, zoom_globe_around_pixel},
+    UpdateState,
+};
 
 pub struct ZoomHandler {
     window_position: Option<Vector2<f64>>,
@@ -21,7 +24,10 @@ impl UpdateState for ZoomHandler {
         _dt: Duration,
     ) {
         if let Some(zoom_delta) = self.zoom_delta {
-            if let Some(window_position) = self.window_position {
+            let window_position = self
+                .window_position
+                .unwrap_or_else(|| center_pixel(view_state));
+            {
                 let current_zoom = view_state.zoom();
                 let next_zoom = current_zoom + zoom_delta;
 
