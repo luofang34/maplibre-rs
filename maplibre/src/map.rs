@@ -6,6 +6,7 @@ use crate::{
     context::MapContext,
     coords::{LatLon, WorldCoords, Zoom},
     environment::Environment,
+    io::tile_json::resolve_tile_json_sources,
     kernel::Kernel,
     plugin::Plugin,
     render::{
@@ -100,6 +101,8 @@ where
                     .map_err(MapError::DeviceInit)?;
 
                 let window_size = self.window.size();
+
+                resolve_tile_json_sources(style, self.kernel.source_client()).await;
 
                 let center = style.center.unwrap_or_default();
                 let initial_zoom = style.zoom.map(Zoom::new).unwrap_or_default();
