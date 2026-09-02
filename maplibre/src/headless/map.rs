@@ -206,7 +206,12 @@ impl HeadlessMap {
             visible_level,
             ViewStatePadding::Loose,
         )?
-        .map_or_else(Vec::new, |region| region.iter().collect()))
+        .map_or_else(Vec::new, |region| {
+            region
+                .iter()
+                .filter(|coords| coords.build_quad_key().is_some())
+                .collect()
+        }))
     }
 
     pub async fn fetch_tile(&self, coords: WorldTileCoords) -> Result<Box<[u8]>, SourceFetchError> {

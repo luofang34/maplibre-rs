@@ -41,7 +41,9 @@ mod report;
 mod source_tiles;
 
 use comparison::{compare_and_diff, composite_opaque_background};
-use paths::{collect_tests, local_tile_path, workspace_templates_dir, workspace_tests_dir};
+use paths::{
+    collect_tests, local_data_path, local_tile_path, workspace_templates_dir, workspace_tests_dir,
+};
 use report::generate_report;
 use source_tiles::source_tile_coords;
 
@@ -234,12 +236,33 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
 
         match source {
             Source::GeoJson(geojson_source) => {
+                let loaded;
                 let geojson_value = match &geojson_source.data {
                     GeoJsonData::Inline(value) => value,
                     GeoJsonData::Url(url) => {
-                        return TestResult::Error(format!(
-                            "URL GeoJSON source '{source_name}' is unsupported: {url}"
-                        ));
+                        let path = match local_data_path(url) {
+                            Ok(path) => path,
+                            Err(error) => return TestResult::Error(error),
+                        };
+                        let text = match std::fs::read_to_string(&path) {
+                            Ok(text) => text,
+                            Err(error) => {
+                                return TestResult::Error(format!(
+                                    "Cannot read GeoJSON {}: {error}",
+                                    path.display()
+                                ));
+                            }
+                        };
+                        loaded = match serde_json::from_str::<Value>(&text) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                return TestResult::Error(format!(
+                                    "Cannot parse GeoJSON {}: {error}",
+                                    path.display()
+                                ));
+                            }
+                        };
+                        &loaded
                     }
                 };
                 for coords in &target_coords {
