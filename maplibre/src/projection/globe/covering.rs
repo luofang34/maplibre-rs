@@ -81,16 +81,6 @@ pub fn nearest_tile_wrap(center_x: f64, tile: TileCoords) -> i8 {
     }
 }
 
-/// Returns whether the globe covering algorithm may vary zoom within one frame.
-pub fn allows_variable_zoom(covering_zoom: i32) -> bool {
-    covering_zoom > 4
-}
-
-/// Returns whether globe projection draws wrapped world copies.
-pub const fn allows_world_copies() -> bool {
-    false
-}
-
 /// Computes the convex bounding volume for a globe tile and elevation range.
 pub fn globe_tile_bounding_volume(
     tile: TileCoords,

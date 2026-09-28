@@ -81,6 +81,9 @@ pub fn covering_tiles(
             zoom: u8::from(options.zoom),
         });
     }
+    if options.max_tiles == 0 {
+        return Ok(Vec::new());
+    }
     let mut stack = vec![StackEntry {
         tile: TileCoords::from((0, 0, ZoomLevel::new(0))),
         fully_visible: false,
@@ -116,8 +119,8 @@ pub fn covering_tiles(
         push_children(&mut stack, entry.tile, intersection == Intersection::Full);
     }
 
-    sort_by_center(&mut visible, camera.center(), options.zoom);
-    Ok(add_padding(visible, options))
+    sort_by_center(&mut visible, camera.center());
+    Ok(add_padding(visible, options.padding, options.max_tiles))
 }
 
 /// Returns the conservative elevation used to retain features near the frustum horizon.
@@ -177,48 +180,45 @@ fn push_children(stack: &mut Vec<StackEntry>, tile: TileCoords, fully_visible: b
     }
 }
 
-fn sort_by_center(tiles: &mut [WorldTileCoords], center: LatLon, nominal_zoom: ZoomLevel) {
+fn sort_by_center(tiles: &mut [WorldTileCoords], center: LatLon) {
     let center_x = center.longitude / 360.0 + 0.5;
     let latitude = center.latitude.to_radians();
     let center_y = (1.0 - latitude.tan().asinh() / std::f64::consts::PI) * 0.5;
     tiles.sort_by(|left, right| {
-        distance_squared(*left, center_x, center_y, nominal_zoom).total_cmp(&distance_squared(
-            *right,
-            center_x,
-            center_y,
-            nominal_zoom,
-        ))
+        distance_squared(*left, center_x, center_y)
+            .total_cmp(&distance_squared(*right, center_x, center_y))
+            .then_with(|| left.cmp(right))
     });
 }
 
-fn distance_squared(
-    tile: WorldTileCoords,
-    center_x: f64,
-    center_y: f64,
-    nominal_zoom: ZoomLevel,
-) -> f64 {
-    let count = 2_f64.powi(i32::from(u8::from(nominal_zoom)));
-    let dx = center_x * count - 0.5 - f64::from(tile.x);
-    let dy = center_y * count - 0.5 - f64::from(tile.y);
+fn distance_squared(tile: WorldTileCoords, center_x: f64, center_y: f64) -> f64 {
+    let count = 2_f64.powi(i32::from(u8::from(tile.z)));
+    let dx = center_x - (f64::from(tile.x) + 0.5) / count;
+    let dx = dx - dx.round();
+    let dy = center_y - (f64::from(tile.y) + 0.5) / count;
     dx * dx + dy * dy
 }
 
 fn add_padding(
     visible: Vec<WorldTileCoords>,
-    options: GlobeCoveringOptions,
+    padding: i32,
+    max_tiles: usize,
 ) -> Vec<WorldTileCoords> {
-    if options.max_tiles == 0 {
+    if max_tiles == 0 {
         return Vec::new();
     }
-    if options.padding <= 0 {
-        return visible.into_iter().take(options.max_tiles).collect();
+    if padding <= 0 {
+        return visible.into_iter().take(max_tiles).collect();
     }
-    let mut seen = HashSet::new();
-    let mut padded = Vec::new();
+    let mut padded: Vec<_> = visible.iter().take(max_tiles).copied().collect();
+    let mut seen: HashSet<_> = padded.iter().copied().collect();
+    if padded.len() == max_tiles {
+        return padded;
+    }
     for tile in visible {
         let count = 1_i64 << u8::from(tile.z);
-        for delta_x in -options.padding..=options.padding {
-            for delta_y in -options.padding..=options.padding {
+        for delta_x in -padding..=padding {
+            for delta_y in -padding..=padding {
                 let y = i64::from(tile.y) + i64::from(delta_y);
                 if !(0..count).contains(&y) {
                     continue;
@@ -230,7 +230,7 @@ fn add_padding(
                 };
                 if seen.insert(candidate) {
                     padded.push(candidate);
-                    if padded.len() == options.max_tiles {
+                    if padded.len() == max_tiles {
                         return padded;
                     }
                 }

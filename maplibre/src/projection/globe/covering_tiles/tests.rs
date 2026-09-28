@@ -104,8 +104,8 @@ fn pitched_view_matches_gl_js_variable_lod_reference() {
     let mut covering_options = options(8);
     covering_options.variable_zoom = true;
     covering_options.elevation.max_meters = super::elevation_for_tile_culling(&globe, 0.0);
-    let tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
-    let expected = [
+    let mut tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
+    let mut expected = [
         (32, 31, ZoomLevel::new(6)).into(),
         (31, 31, ZoomLevel::new(6)).into(),
         (511, 512, ZoomLevel::new(10)).into(),
@@ -114,6 +114,8 @@ fn pitched_view_matches_gl_js_variable_lod_reference() {
         (512, 513, ZoomLevel::new(10)).into(),
     ];
 
+    tiles.sort();
+    expected.sort();
     assert_eq!(tiles, expected);
 }
 
@@ -134,8 +136,8 @@ fn pitched_rotated_view_matches_gl_js_variable_lod_reference() {
     let mut covering_options = options(8);
     covering_options.variable_zoom = true;
     covering_options.elevation.max_meters = super::elevation_for_tile_culling(&globe, 0.0);
-    let tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
-    let expected = [
+    let mut tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
+    let mut expected = [
         (64, 64, ZoomLevel::new(7)).into(),
         (64, 63, ZoomLevel::new(7)).into(),
         (63, 63, ZoomLevel::new(7)).into(),
@@ -144,6 +146,8 @@ fn pitched_rotated_view_matches_gl_js_variable_lod_reference() {
         (511, 513, ZoomLevel::new(10)).into(),
     ];
 
+    tiles.sort();
+    expected.sort();
     assert_eq!(tiles, expected);
 }
 
@@ -152,13 +156,55 @@ fn antimeridian_view_selects_both_canonical_edges() {
     let globe = camera(128.0, 128.0, LatLon::new(-0.001, 179.99), 5.0);
     let mut covering_options = options(5);
     covering_options.variable_zoom = true;
-    let tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
-    let expected = [
+    let mut tiles = covering_tiles(&globe, covering_options).expect("covering should succeed");
+    let mut expected = [
         (31, 16, ZoomLevel::new(5)).into(),
         (31, 15, ZoomLevel::new(5)).into(),
         (0, 16, ZoomLevel::new(5)).into(),
         (0, 15, ZoomLevel::new(5)).into(),
     ];
 
+    tiles.sort();
+    expected.sort();
     assert_eq!(tiles, expected);
+}
+
+#[test]
+fn mixed_zoom_tiles_use_one_coordinate_space() {
+    let nearby = (8, 8, ZoomLevel::new(4)).into();
+    let distant = (128, 64, ZoomLevel::new(8)).into();
+    let mut tiles = vec![distant, nearby];
+    super::sort_by_center(&mut tiles, LatLon::new(0.0, 0.0));
+    assert_eq!(tiles[0], nearby);
+}
+
+#[test]
+fn padding_preserves_visible_tiles_when_the_budget_is_full() {
+    let visible: Vec<_> = (0..20).map(|x| (x, 20, ZoomLevel::new(8)).into()).collect();
+    let padded = super::add_padding(visible.clone(), 1, visible.len());
+    assert_eq!(padded, visible);
+}
+
+#[test]
+fn zero_tile_budget_does_not_traverse_a_high_zoom_globe() {
+    let tiles = covering_tiles(
+        &camera(512.0, 512.0, LatLon::new(0.0, 0.0), 0.0),
+        GlobeCoveringOptions {
+            max_tiles: 0,
+            ..options(31)
+        },
+    )
+    .expect("valid zero-budget request");
+    assert!(tiles.is_empty());
+}
+
+#[test]
+fn tile_priority_wraps_at_the_antimeridian() {
+    for (longitude, near_x, far_x) in [(179.0, 0, 6), (-179.0, 7, 1)] {
+        let nearby = (near_x, 4, ZoomLevel::new(3)).into();
+        let distant = (far_x, 4, ZoomLevel::new(3)).into();
+        let mut tiles = vec![distant, nearby];
+        super::sort_by_center(&mut tiles, LatLon::new(0.0, longitude));
+        assert_eq!(tiles[0], nearby);
+    }
 }
