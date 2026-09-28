@@ -4,15 +4,7 @@
 //! `expected.png`, writes `actual.png` and `diff.png`, and generates
 //! `render-tests/src/templates/results.html`.
 //!
-//! # Usage
-//!
-//! ```
-//! # Run all tests (from workspace root)
-//! cargo run -p render-tests
-//!
-//! # Run a single test or category
-//! cargo run -p render-tests -- render-tests/src/tests/fill-color
-//! ```
+//! Pass a fixture directory as the first argument to select a test or category.
 
 use std::{
     path::{Path, PathBuf},
@@ -40,16 +32,12 @@ mod paths;
 mod report;
 mod source_tiles;
 
-use comparison::{compare_and_diff, composite_opaque_background};
+use comparison::{compare_and_diff, composite_opaque_background, unpremultiply};
 use paths::{
     collect_tests, local_data_path, local_tile_path, workspace_templates_dir, workspace_tests_dir,
 };
 use report::generate_report;
 use source_tiles::source_tile_coords;
-
-// ---------------------------------------------------------------------------
-// Test metadata
-// ---------------------------------------------------------------------------
 
 #[derive(Debug)]
 struct TestMeta {
@@ -97,10 +85,6 @@ fn parse_test_meta(style_value: &Value) -> TestMeta {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Single test
-// ---------------------------------------------------------------------------
-
 #[derive(Debug)]
 struct TestOutcome {
     id: String,
@@ -147,7 +131,6 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
     let actual_path = test_dir.join("actual.png");
     let diff_path = test_dir.join("diff.png");
 
-    // ---- Load & parse style.json ----
     let style_str = match std::fs::read_to_string(&style_path) {
         Ok(s) => s,
         Err(e) => return TestResult::Error(format!("Cannot read style.json: {e}")),
@@ -169,7 +152,6 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
         layer.index = i as u32 + 1; // Start at 1 to be > 0.0 depth clear
     }
 
-    // ---- Set up headless renderer ----
     let (kernel, renderer) = match create_headless_renderer(meta.width, meta.height, None).await {
         Ok(renderer) => renderer,
         Err(error) => {
@@ -206,7 +188,6 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
         Err(e) => return TestResult::Error(format!("HeadlessMap creation failed: {e:?}")),
     };
 
-    // ---- Process GeoJSON sources ----
     let target_coords = match map.required_tile_coords() {
         Ok(coords) => coords,
         Err(error) => {
@@ -363,7 +344,6 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
         }
     }
 
-    // ---- Render ----
     let frame_paths = [PathBuf::from("frame_0.png"), PathBuf::from("frame_1.png")];
     for frame_path in &frame_paths {
         match std::fs::remove_file(frame_path) {
@@ -387,13 +367,15 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
             "Cannot move rendered frame into test output: {error}"
         ));
     }
+    if let Err(error) = unpremultiply(&actual_path) {
+        return TestResult::Error(error);
+    }
     if let Some(background) = meta.comparison_background {
         if let Err(error) = composite_opaque_background(&actual_path, background) {
             return TestResult::Error(error);
         }
     }
 
-    // ---- Compare with expected.png ----
     if !expected_path.exists() {
         return TestResult::Error(format!(
             "expected.png not found: {}",
@@ -411,10 +393,6 @@ async fn run_test_inner(test_dir: &Path) -> TestResult {
 fn crate_projection_default() -> maplibre::projection::ProjectionType {
     maplibre::projection::ProjectionType::default()
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 fn run() -> Result<bool, String> {
     let args: Vec<String> = std::env::args().collect();
