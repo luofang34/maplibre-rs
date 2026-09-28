@@ -34,27 +34,18 @@ Circle, heatmap, hillshade, fill-extrusion, image-source, custom-layer, marker, 
 blocked by missing or incomplete projection-independent renderer/API support. They remain in the
 compatibility inventory and become globe requirements when their flat-renderer counterparts land.
 
-## Implementation status
+## Delivery boundary
 
-A reference implementation accompanies this RFC as a single pull request of one commit per area:
+The first implementation covers projection selection and transition, globe camera mathematics,
+tile covering and subdivision, supported fill/line/raster/background paint paths, atmosphere,
+symbol anchors and occlusion, and winit interaction. It does not claim full GL JS compatibility.
+Glyph rendering and advanced line placement depend on a complete flat symbol pipeline. Missing
+paint properties, raster tile-size semantics, roll, and host camera/event/custom-layer APIs remain
+separate work; parsing a property is not evidence that the renderer implements it.
 
-| Area | Status | Evidence |
-| --- | --- | --- |
-| Style projection model | Complete | Mercator, globe, vertical perspective, explicit transitions, interpolate, and step tests |
-| Globe mathematics and camera | Complete | Coordinate, orientation, horizon, ray/sphere, screen round-trip, and precision tests |
-| Tile covering and LOD | Complete | Frustum, wrap, antimeridian, pitch, rotation, and elevation-bound fixtures |
-| Raster/background meshes | Complete | Subdivided grids, borders, poles, stencil ordering, and z0 background mesh tests |
-| Fill and line projection | Complete for supported paint paths | Seven imported fill/line goldens plus shared WGSL and CPU subdivision tests |
-| Raster projection | Complete | Three imported goldens, homogeneous sampling, poles, and two-pass seam ownership |
-| Symbols | Partial | Anchor projection, horizon culling, collision opacity, and antimeridian tests; tangent-aligned line labels remain |
-| Atmosphere | Complete for the active style model | Eight imported goldens cover physical scattering, blend, zoom, map/viewport lights, and graph-ordered headless capture |
-| Interaction and queries | Wired in winit | versor drag with silhouette fallback and pole dial, pan inertia, pointer zoom heuristic, keyboard pan, hit and horizon queries; jump/ease/fly and the bounds solver remain library functions without a host camera API |
-| GL JS render corpus | 19 Golden | Exact upstream styles, local assets, camera metadata, and expected images run in one Metal/wgpu suite |
-| Host UI/custom-layer integration | Partial | the desktop and web demos load globe styles and fetch style-declared tile sources, layers honor their zoom ranges, and the debug tile grid follows the projection; maplibre-rs still lacks the projection-independent camera animation, event, marker, popup, and custom-layer host API |
-| Terrain | Deferred | Elevation-aware math exists; DEM sampling, depth, picking, and render integration are outside this RFC |
-
-The detailed compatibility matrix is maintained in
-[`globe-projection-parity.md`](globe-projection-parity.md).
+The pinned corpus and its capability prerequisites are described in
+[`globe-projection-parity.md`](globe-projection-parity.md). Pull request descriptions carry validation
+results for the implementation under review.
 
 # Guide-level explanation
 
@@ -235,7 +226,9 @@ must be conservative: it may retain a hidden tile but must not remove a visible 
 
 ## Layer behavior
 
-The projection path is shared, but layer semantics require separate acceptance tests:
+The projection path is shared, but layer semantics require separate acceptance tests. The following
+contracts apply when the corresponding projection-independent capability exists; they are not
+claims that the first implementation supports every listed paint property or layer:
 
 - fills and outlines preserve seams, translations, patterns, gradients, and opacity;
 - lines preserve screen-space width, dashes, patterns, gradients, joins, and antimeridian behavior;
@@ -291,7 +284,7 @@ The compatibility gate has four levels:
 1. Pure math tests compare coordinate, orientation, horizon, zoom, interpolation, and ray/sphere
    invariants with MapLibre GL JS fixtures.
 2. Transform tests cover matrices, projection/unprojection, bounds, occlusion, covering tiles,
-   camera operations, and terrain picking.
+   camera operations, and surface picking. Terrain picking belongs to the terrain follow-up.
 3. Shader and mesh tests cover subdivision, shared edges, poles, antimeridian clipping, radial
    elevation, transition endpoints, and GPU precision-sensitive coordinates.
 4. Render tests run 19 MapLibre GL JS `projection/globe` styles and exact expected images
@@ -386,9 +379,10 @@ Rendering a standalone sphere textured with a flat map was considered. It cannot
 layer semantics, symbol placement, feature queries, extrusion geometry, or terrain and therefore
 does not meet the compatibility goal.
 
-Shipping globe without the transition, interactions, or terrain was considered. Those pieces may be
-delivered as intermediate steps of the implementation, but they are not an acceptable definition of feature
-completion because the shared style and API would claim behavior the renderer does not provide.
+Shipping globe without projection transition or the existing host's interaction paths was considered.
+Those paths are required for the first delivery because loading a globe style must also change how
+the map responds to input. Terrain remains a separate capability and is not a prerequisite for this
+delivery; unsupported renderer and host features must be reported as such.
 
 # Prior art
 
