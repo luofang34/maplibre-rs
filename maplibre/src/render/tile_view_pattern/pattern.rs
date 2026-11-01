@@ -143,8 +143,11 @@ impl<Q: Queue<B>, B> TileViewPattern<Q, B> {
             let Some((coords, wrap)) = seen.wrapped() else {
                 continue;
             };
+            let vector_sources = ScreenVectorSources {
+                sources: sources.of_kind(TileKind::Vector),
+            };
             let mut vector = source_shapes(
-                &sources.of_kind(TileKind::Vector),
+                &vector_sources,
                 coords,
                 zoom,
                 world,
@@ -345,6 +348,28 @@ fn raster_shapes<T: HasTile>(
         tiles.extend(covered);
         tiles.sort_by_key(|tile| tile.z);
         selected_shapes(coords, tiles, zoom, used_parents)
+    }
+}
+
+struct ScreenVectorSources<'a> {
+    sources: super::KindSources<'a>,
+}
+
+impl<'a> HasTile for ScreenVectorSources<'a> {
+    fn has_tile(&self, coords: WorldTileCoords, world: &World) -> bool {
+        if !self.sources.has_tile(coords, world) {
+            return false;
+        }
+        let pool = world
+            .resources
+            .get::<crate::render::eventually::Eventually<crate::vector::VectorBufferPool>>();
+        if !matches!(
+            pool,
+            Some(crate::render::eventually::Eventually::Initialized(_))
+        ) {
+            return true;
+        }
+        crate::vector::geometry_uploaded(coords, world)
     }
 }
 

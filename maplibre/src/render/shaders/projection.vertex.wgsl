@@ -143,11 +143,13 @@ fn globe_circumference_ratio_at_tile_y(
 }
 
 fn project_symbol_scale(tile_y: f32, tile_mercator_coords: vec4<f32>) -> f32 {
-    let circumference = max(
+    let circumference = clamp(
         globe_circumference_ratio_at_tile_y(tile_y, tile_mercator_coords),
-        1e-6,
+        0.08627,
+        1.0,
     );
-    return mix(1.0, 1.0 / circumference, projection.transition_and_padding.x);
+    let globe_scale = clamp(projection.globe_circle.x / circumference, 0.25, 4.0);
+    return mix(1.0, globe_scale, projection.transition_and_padding.x);
 }
 
 fn globe_horizon_distance(
