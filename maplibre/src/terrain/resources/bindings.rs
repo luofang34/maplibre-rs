@@ -13,7 +13,7 @@ impl TerrainResources {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
                     min_binding_size: NonZeroU64::new(
-                        std::mem::size_of::<TerrainTileUniforms>() as u64,
+                        std::mem::size_of::<TerrainTileUniforms>() as u64
                     ),
                 },
                 count: None,

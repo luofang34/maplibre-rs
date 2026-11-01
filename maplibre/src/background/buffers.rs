@@ -138,11 +138,7 @@ impl BackgroundGpuBuffers {
             inner.metadata_capacity = new_capacity;
         }
         if !metadatas.is_empty() {
-            queue.write_buffer(
-                &inner.metadata_buffer,
-                0,
-                bytemuck::cast_slice(metadatas),
-            );
+            queue.write_buffer(&inner.metadata_buffer, 0, bytemuck::cast_slice(metadatas));
         }
     }
 
@@ -198,11 +194,7 @@ impl BackgroundGpuBuffers {
         sky: &SkyLayerMetadata,
     ) {
         let inner = self.ensure_allocated(device);
-        queue.write_buffer(
-            &inner.sky_metadata_buffer,
-            0,
-            bytemuck::bytes_of(sky),
-        );
+        queue.write_buffer(&inner.sky_metadata_buffer, 0, bytemuck::bytes_of(sky));
     }
 
     /// Returns the persistent background metadata buffer, or `None` if unallocated.
@@ -217,7 +209,9 @@ impl BackgroundGpuBuffers {
 
     /// Returns the persistent atmosphere metadata buffer, or `None` if unallocated.
     pub fn atmosphere_metadata_buffer(&self) -> Option<&wgpu::Buffer> {
-        self.inner.as_ref().map(|inner| &inner.atmosphere_metadata_buffer)
+        self.inner
+            .as_ref()
+            .map(|inner| &inner.atmosphere_metadata_buffer)
     }
 
     /// Returns the persistent sky metadata buffer, or `None` if unallocated.
@@ -227,12 +221,16 @@ impl BackgroundGpuBuffers {
 
     /// Returns the allocated capacity of the metadata buffer in elements.
     pub fn metadata_capacity(&self) -> usize {
-        self.inner.as_ref().map_or(0, |inner| inner.metadata_capacity)
+        self.inner
+            .as_ref()
+            .map_or(0, |inner| inner.metadata_capacity)
     }
 
     /// Returns the allocated capacity of the globe tile metadata buffer in elements.
     pub fn tile_metadata_capacity(&self) -> usize {
-        self.inner.as_ref().map_or(0, |inner| inner.tile_metadata_capacity)
+        self.inner
+            .as_ref()
+            .map_or(0, |inner| inner.tile_metadata_capacity)
     }
 }
 
@@ -254,10 +252,7 @@ pub fn globe_tiles(world: &crate::tcs::world::World) -> Vec<WorldTileCoords> {
 }
 
 /// Calculates tile metadata for globe background tiles.
-pub fn globe_tile_metadata(
-    view_state: &ViewState,
-    coords: WorldTileCoords,
-) -> ShaderTileMetadata {
+pub fn globe_tile_metadata(view_state: &ViewState, coords: WorldTileCoords) -> ShaderTileMetadata {
     let scale = view_state.zoom().scale_to_tile(&coords) as f32;
     ShaderTileMetadata {
         transform: view_state

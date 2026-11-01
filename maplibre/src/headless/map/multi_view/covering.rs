@@ -50,7 +50,9 @@ pub(super) fn build_slot_view_state(
     let projection = style
         .projection
         .as_ref()
-        .map_or(ProjectionType::Mercator, |spec| spec.projection_type.clone());
+        .map_or(ProjectionType::Mercator, |spec| {
+            spec.projection_type.clone()
+        });
     let mut state = base.clone();
     state.resize(slot_size.to_logical(scale_factor));
     state.set_opaque_environment(opaque_environment);
@@ -102,8 +104,10 @@ pub(super) fn build_multi_view_coverings(
     let mut terrain_seen = HashSet::new();
     let mut drape_requests_seen = HashSet::new();
     let mut drape_requests = Vec::new();
-    let mut raster_by_source: BTreeMap<RasterSourceId, (HashSet<WorldTileCoords>, Vec<WorldTileCoords>)> =
-        BTreeMap::new();
+    let mut raster_by_source: BTreeMap<
+        RasterSourceId,
+        (HashSet<WorldTileCoords>, Vec<WorldTileCoords>),
+    > = BTreeMap::new();
 
     for (slot_id, slot_state) in registry.iter() {
         if !active_ids.contains(slot_id) {
@@ -132,15 +136,14 @@ pub(super) fn build_multi_view_coverings(
         .get::<crate::render::settings::TerrainDrapeMode>()
         .copied()
         .or_else(|| {
-            match world
-                .resources
-                .get::<crate::render::eventually::Eventually<crate::terrain::resources::TerrainResources>>()
-            {
-                Some(crate::render::eventually::Eventually::Initialized(terrain)) => {
-                    Some(terrain.drape_mode())
+            match world.resources.get::<crate::render::eventually::Eventually<
+                    crate::terrain::resources::TerrainResources,
+                >>() {
+                    Some(crate::render::eventually::Eventually::Initialized(terrain)) => {
+                        Some(terrain.drape_mode())
+                    }
+                    _ => None,
                 }
-                _ => None,
-            }
         })
         .is_some_and(|mode| mode.is_procedural_relief());
 
@@ -262,10 +265,7 @@ pub(super) fn record_slot_post_render(
 
     slot_state.lod_history = FrameLodHistory {
         view: crate::projection::lod_history::LodHistory::new(
-            shared
-                .as_ref()
-                .and_then(|s| s.tiles())
-                .unwrap_or(&[]),
+            shared.as_ref().and_then(|s| s.tiles()).unwrap_or(&[]),
         ),
         raster: shared
             .as_ref()

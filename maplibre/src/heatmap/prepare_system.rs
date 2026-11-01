@@ -85,4 +85,3 @@ mod tests {
         assert_eq!(density_target_size(-100.0, -100.0), (1, 1));
     }
 }
-

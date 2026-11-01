@@ -106,7 +106,12 @@ fn dem_cache_key(
 }
 
 fn raster_cache_key(url: &str, coords: &WorldTileCoords) -> String {
-    format!("raster:{url}:{}:{}:{}", u8::from(coords.z), coords.x, coords.y)
+    format!(
+        "raster:{url}:{}:{}:{}",
+        u8::from(coords.z),
+        coords.x,
+        coords.y
+    )
 }
 
 impl AssetCache {
@@ -156,7 +161,8 @@ impl AssetCache {
                 message: format!("tile coordinates {coords} are outside the addressable range"),
             });
         };
-        let is_mock = url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
+        let is_mock =
+            url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
         if is_mock {
             let data = client.fetch(coords, source).await.map_err(|error| {
                 if error.is_not_found() {
@@ -213,7 +219,8 @@ impl AssetCache {
                 message: format!("tile coordinates {coords} are outside the addressable range"),
             });
         };
-        let is_mock = url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
+        let is_mock =
+            url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
         if is_mock {
             let image = self.load_raster_tile(client, source, coords).await?;
             let sample_metres = dem::sample_metres(*coords, image.width(), circumference_meters);
@@ -233,8 +240,10 @@ impl AssetCache {
                 .await
                 .map_err(CachedTileFailure::into_asset_failure)?;
             let sample_metres = dem::sample_metres(*coords, image.width(), circumference_meters);
-            let tile = DemTile::from_image_despiked(&image, unpack, sample_metres)
-                .map_err(|error| CachedTileFailure::Decode(error.to_string()).into_asset_failure())?;
+            let tile =
+                DemTile::from_image_despiked(&image, unpack, sample_metres).map_err(|error| {
+                    CachedTileFailure::Decode(error.to_string()).into_asset_failure()
+                })?;
             self.0.dem_decodes.fetch_add(1, Ordering::Relaxed);
             let bytes = tile.pixels().len();
             Ok((

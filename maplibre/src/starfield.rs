@@ -61,13 +61,25 @@ impl<E: Environment> Plugin<E> for StarfieldPlugin {
         schedule.add_system_to_stage(RenderStageLabel::Queue, moon::queue_system);
         if let Some(hooks) = world.resources.get_mut::<crate::render::PassDrawHooks>() {
             hooks.register(crate::render::PassHookPoint::MainPassBegin, draw);
-            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, sun::draw);
-            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, moon::draw);
+            hooks.register(
+                crate::render::PassHookPoint::TranslucentPassBegin,
+                sun::draw,
+            );
+            hooks.register(
+                crate::render::PassHookPoint::TranslucentPassBegin,
+                moon::draw,
+            );
         } else {
             let mut hooks = crate::render::PassDrawHooks::new();
             hooks.register(crate::render::PassHookPoint::MainPassBegin, draw);
-            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, sun::draw);
-            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, moon::draw);
+            hooks.register(
+                crate::render::PassHookPoint::TranslucentPassBegin,
+                sun::draw,
+            );
+            hooks.register(
+                crate::render::PassHookPoint::TranslucentPassBegin,
+                moon::draw,
+            );
             world.resources.insert(hooks);
         }
         add_sun_depth_copy(graph);

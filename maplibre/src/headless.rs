@@ -70,6 +70,7 @@ pub use map::{
     ViewSlotEntry, ViewSlotId,
 };
 pub use shared_assets::SharedMapAssets;
+
 pub use crate::render::{
     placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask},
     settings::{ProceduralReliefStyle, TerrainDrapeMode},

@@ -48,8 +48,14 @@ impl Default for Inner {
 impl std::fmt::Debug for Inner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedPipelines")
-            .field("shader_compiles", &self.shader_compiles.load(Ordering::Relaxed))
-            .field("pipeline_compiles", &self.pipeline_compiles.load(Ordering::Relaxed))
+            .field(
+                "shader_compiles",
+                &self.shader_compiles.load(Ordering::Relaxed),
+            )
+            .field(
+                "pipeline_compiles",
+                &self.pipeline_compiles.load(Ordering::Relaxed),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -140,7 +146,8 @@ impl SharedPipelines {
     }
 
     pub(crate) fn enter(cache: Option<Self>) -> PipelineCacheScope {
-        let previous = ACTIVE_PIPELINES.with(|slot| std::mem::replace(&mut *slot.borrow_mut(), cache));
+        let previous =
+            ACTIVE_PIPELINES.with(|slot| std::mem::replace(&mut *slot.borrow_mut(), cache));
         PipelineCacheScope { previous }
     }
 
@@ -160,10 +167,8 @@ impl SharedPipelines {
         if let Some(existing) = state.layouts.get(&key) {
             return existing.clone();
         }
-        let created = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label,
-            entries,
-        });
+        let created =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label, entries });
         state.layouts.insert(key, created.clone());
         created
     }
@@ -200,7 +205,10 @@ impl SharedPipelines {
         let key = PipelineCacheKey {
             device: device.clone(),
             label: descriptor.label.clone(),
-            prefix_layouts: prefix_layouts.iter().map(|layout| (*layout).clone()).collect(),
+            prefix_layouts: prefix_layouts
+                .iter()
+                .map(|layout| (*layout).clone())
+                .collect(),
             owned_layouts: descriptor.layout.clone(),
             vertex: descriptor.vertex.clone(),
             fragment: descriptor.fragment.clone(),

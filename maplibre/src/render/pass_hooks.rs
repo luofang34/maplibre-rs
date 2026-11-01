@@ -68,13 +68,17 @@ mod tests {
     fn test_pass_draw_hooks_registration_and_retrieval() {
         let mut hooks = PassDrawHooks::new();
         assert!(hooks.get_hooks(PassHookPoint::MainPassBegin).is_empty());
-        assert!(hooks.get_hooks(PassHookPoint::TranslucentPassBegin).is_empty());
+        assert!(hooks
+            .get_hooks(PassHookPoint::TranslucentPassBegin)
+            .is_empty());
 
         let counter = Arc::new(AtomicUsize::new(0));
         hooks.register(PassHookPoint::MainPassBegin, CounterHook(counter.clone()));
 
         let main_hooks = hooks.get_hooks(PassHookPoint::MainPassBegin);
         assert_eq!(main_hooks.len(), 1);
-        assert!(hooks.get_hooks(PassHookPoint::TranslucentPassBegin).is_empty());
+        assert!(hooks
+            .get_hooks(PassHookPoint::TranslucentPassBegin)
+            .is_empty());
     }
 }

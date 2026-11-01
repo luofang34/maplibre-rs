@@ -79,10 +79,7 @@ impl<E: Environment> Plugin<E> for RenderPlugin {
             .add_node_edge(input_node_id, draw_graph::node::MAIN_PASS)
             .expect("main pass or draw node does not exist");
         draw_graph
-            .add_node_edge(
-                draw_graph::node::MAIN_PASS,
-                draw_graph::node::SCENE_3D_PASS,
-            )
+            .add_node_edge(draw_graph::node::MAIN_PASS, draw_graph::node::SCENE_3D_PASS)
             .expect("main pass or scene 3d pass node does not exist");
         draw_graph
             .add_node_edge(

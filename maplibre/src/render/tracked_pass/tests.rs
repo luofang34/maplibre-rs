@@ -325,4 +325,3 @@ async fn redundant_vertex_and_index_buffer_bindings_record_as_redundant() {
     assert_eq!(pass.stats().state_changes, 3);
     assert_eq!(pass.stats().redundant_state_changes, 2);
 }
-

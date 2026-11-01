@@ -6,10 +6,12 @@ use crate::{
     coords::{LatLon, WorldCoords, Zoom, TILE_SIZE},
     projection::{
         body::Body,
-        globe::covering::{TileElevationProvider, TileElevationRange},
-        globe::covering_tiles::{
-            covering_tiles_with_history, lod::LodContext, FarPlane, GlobeCoveringOptions,
-            SourceZoomRange, ZoomRounding,
+        globe::{
+            covering::{TileElevationProvider, TileElevationRange},
+            covering_tiles::{
+                covering_tiles_with_history, lod::LodContext, FarPlane, GlobeCoveringOptions,
+                SourceZoomRange, ZoomRounding,
+            },
         },
         ProjectionType,
     },
@@ -276,8 +278,8 @@ fn three_degree_final_approach_at_15m_agl_selects_runway_zoom_from_lod_focal_pix
     .expect("visible region");
 
     for ahead_meters in [300.0, 600.0, 1_000.0] {
-        let lat = threshold_origin.latitude
-            + (ahead_meters / Body::EARTH.radius_meters).to_degrees();
+        let lat =
+            threshold_origin.latitude + (ahead_meters / Body::EARTH.radius_meters).to_degrees();
         let x = threshold_origin.longitude / 360.0 + 0.5;
         let y = (1.0 - lat.to_radians().tan().asinh() / std::f64::consts::PI) * 0.5;
         let selected = region
@@ -289,8 +291,7 @@ fn three_degree_final_approach_at_15m_agl_selects_runway_zoom_from_lod_focal_pix
             .map(|tile| u8::from(tile.z))
             .max()
             .unwrap_or_else(|| panic!("missing runway tile at {ahead_meters} m ahead"));
-        let distance = ahead_meters
-            .hypot(15.0)
+        let distance = ahead_meters.hypot(15.0)
             / Body::EARTH.circumference_at_latitude(threshold_origin.latitude);
         let expected_zoom = (focal / (TILE_SIZE * distance)).log2().floor() as u8;
         assert!(

@@ -23,7 +23,9 @@ use maplibre::{
 fn test_pass_draw_hooks_empty_noop() {
     let hooks = PassDrawHooks::new();
     assert!(hooks.get_hooks(PassHookPoint::MainPassBegin).is_empty());
-    assert!(hooks.get_hooks(PassHookPoint::TranslucentPassBegin).is_empty());
+    assert!(hooks
+        .get_hooks(PassHookPoint::TranslucentPassBegin)
+        .is_empty());
 
     let world = World::default();
     let pass_hooks = world
@@ -215,7 +217,11 @@ fn test_scene_lighting_daylight_uniform_variations() {
         Vector3::new(0.0, 1.0, 0.0),
         Vector3::new(0.0, 0.0, 1.0),
         Vector3::new(-1.0, 0.0, 0.0),
-        Vector3::new(1.0 / 3.0f64.sqrt(), 1.0 / 3.0f64.sqrt(), 1.0 / 3.0f64.sqrt()),
+        Vector3::new(
+            1.0 / 3.0f64.sqrt(),
+            1.0 / 3.0f64.sqrt(),
+            1.0 / 3.0f64.sqrt(),
+        ),
     ];
 
     for dir in dirs {
@@ -234,7 +240,10 @@ fn test_scene_lighting_daylight_uniform_variations() {
         sun_direction: Some(Vector3::new(f64::MAX, f64::MIN, 0.0)),
         ..Default::default()
     };
-    assert_eq!(extreme.daylight_uniform(), [f32::INFINITY, f32::NEG_INFINITY, 0.0, 1.0]);
+    assert_eq!(
+        extreme.daylight_uniform(),
+        [f32::INFINITY, f32::NEG_INFINITY, 0.0, 1.0]
+    );
 
     let nan_vec = SceneLighting {
         sun_direction: Some(Vector3::new(f64::NAN, f64::INFINITY, f64::NEG_INFINITY)),
@@ -367,8 +376,14 @@ fn test_latlon_dense_roundtrip_precision() {
     for (name, c_lat, c_lon) in cities {
         let city = LatLon::new(c_lat, c_lon);
         let back = LatLon::from_mercator(city.to_mercator());
-        assert!((back.latitude - city.latitude).abs() < 1e-10, "{name} lat precision");
-        assert!((back.longitude - city.longitude).abs() < 1e-10, "{name} lon precision");
+        assert!(
+            (back.latitude - city.latitude).abs() < 1e-10,
+            "{name} lat precision"
+        );
+        assert!(
+            (back.longitude - city.longitude).abs() < 1e-10,
+            "{name} lon precision"
+        );
     }
 }
 
@@ -384,11 +399,15 @@ fn test_latlon_float_edge_cases() {
 
     let nan_lat = LatLon::new(f64::NAN, 0.0);
     assert!(nan_lat.to_mercator().y.is_nan());
-    assert!(LatLon::from_mercator(nan_lat.to_mercator()).latitude.is_nan());
+    assert!(LatLon::from_mercator(nan_lat.to_mercator())
+        .latitude
+        .is_nan());
 
     let nan_lon = LatLon::new(0.0, f64::NAN);
     assert!(nan_lon.to_mercator().x.is_nan());
-    assert!(LatLon::from_mercator(nan_lon.to_mercator()).longitude.is_nan());
+    assert!(LatLon::from_mercator(nan_lon.to_mercator())
+        .longitude
+        .is_nan());
 
     let inf_lat = LatLon::new(f64::INFINITY, 0.0);
     assert!(inf_lat.to_mercator().y.is_nan());

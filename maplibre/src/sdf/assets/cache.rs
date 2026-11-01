@@ -10,10 +10,7 @@ use std::{
     any::Any,
     collections::HashMap,
     future::{poll_fn, Future},
-    sync::{
-        atomic::AtomicUsize,
-        Arc, Mutex, MutexGuard, PoisonError,
-    },
+    sync::{atomic::AtomicUsize, Arc, Mutex, MutexGuard, PoisonError},
     task::{Poll, Waker},
 };
 

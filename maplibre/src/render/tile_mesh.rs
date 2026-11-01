@@ -160,8 +160,12 @@ fn upload_indices(
     indices: TileMeshIndicesRef<'_>,
 ) -> (wgpu::Buffer, wgpu::IndexFormat) {
     let (bytes, format) = match indices {
-        TileMeshIndicesRef::U16(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint16),
-        TileMeshIndicesRef::U32(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint32),
+        TileMeshIndicesRef::U16(values) => {
+            (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint16)
+        }
+        TileMeshIndicesRef::U32(values) => {
+            (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint32)
+        }
     };
     let buffer = queue.create_buffer_init(
         device,

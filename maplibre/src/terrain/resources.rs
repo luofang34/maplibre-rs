@@ -161,7 +161,6 @@ pub struct TerrainResources {
 }
 
 impl TerrainResources {
-
     /// Creates the shared mesh, sampler and uniform storage for an initialized pipeline.
     pub fn new(
         device: &wgpu::Device,
@@ -361,7 +360,10 @@ impl TerrainResources {
 
     /// Creates the scratch attachments used by every drape pass.
     pub fn ensure_scratch(&mut self, device: &wgpu::Device) {
-        if self.drape_scratch.is_some() || self.drape_mode.is_procedural_relief() || self.drape_size == 0 {
+        if self.drape_scratch.is_some()
+            || self.drape_mode.is_procedural_relief()
+            || self.drape_size == 0
+        {
             return;
         }
         let color = self.msaa.is_multisampling().then(|| {

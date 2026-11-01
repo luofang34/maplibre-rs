@@ -139,9 +139,14 @@ pub fn fetch_raster_apc<K: OffscreenKernel, T: RasterTransferables, C: Context +
             }
             if group.source.format(&coords).is_some() {
                 use crate::sdf::assets::tiles::CachedTileFailure;
-                match client.assets().load_raster_tile(&client, &group.source, &coords).await {
+                match client
+                    .assets()
+                    .load_raster_tile(&client, &group.source, &coords)
+                    .await
+                {
                     Ok(rgba) => {
-                        let mut process_context = ProcessRasterContext::<T, _>::new(context.clone());
+                        let mut process_context =
+                            ProcessRasterContext::<T, _>::new(context.clone());
                         if let Err(ProcessRasterError::Send(source)) = process_context
                             .finish_decoded(
                                 &coords,

@@ -87,6 +87,7 @@ mod tests {
     #[test]
     fn camera_altitude_blend_evaluation() {
         use cgmath::Point2;
+
         use crate::{
             coords::LatLon,
             projection::{body::Body, globe::camera::GlobeCameraOptions},

@@ -157,13 +157,14 @@ impl Node for DepthCopyNode {
         state: &RenderResources,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let target: Option<&wgpu::TextureView> = state
-            .eye_depth_target
-            .as_ref()
-            .or_else(|| match &state.depth_readout_texture {
-                Initialized(texture) => Some(&texture.view),
-                Eventually::Uninitialized => None,
-            });
+        let target: Option<&wgpu::TextureView> =
+            state
+                .eye_depth_target
+                .as_ref()
+                .or_else(|| match &state.depth_readout_texture {
+                    Initialized(texture) => Some(&texture.view),
+                    Eventually::Uninitialized => None,
+                });
         let Some(target) = target else {
             return Ok(());
         };

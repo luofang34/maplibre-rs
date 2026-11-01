@@ -107,8 +107,8 @@ impl HeadlessMap {
     /// resident drape texture for `coords` if a covering DEM tile is resident in `World`.
     pub fn resident_terrain_patch(&self, coords: WorldTileCoords) -> Option<TerrainPatchSnapshot> {
         let context = &self.map_context;
-        let fallback_dem = dem_source(&context.style)
-            .map(|dem| (dem.minzoom, dem.maxzoom, dem.exaggeration));
+        let fallback_dem =
+            dem_source(&context.style).map(|dem| (dem.minzoom, dem.maxzoom, dem.exaggeration));
         let empty_index = TerrainCoverageIndex::default();
         let index = context
             .world

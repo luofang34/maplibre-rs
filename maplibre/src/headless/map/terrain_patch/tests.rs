@@ -14,7 +14,9 @@ use crate::{
         camera::EyeFrustum,
         eventually::{Eventually, Eventually::Initialized},
         frame_input::ViewSource,
-        settings::{BufferPoolSizes, Msaa, ProceduralReliefStyle, RendererSettings, TerrainDrapeMode},
+        settings::{
+            BufferPoolSizes, Msaa, ProceduralReliefStyle, RendererSettings, TerrainDrapeMode,
+        },
         view_state::{ExternalAnchor, ExternalView},
         RenderPlugin,
     },
@@ -89,7 +91,9 @@ fn count_red_warning_pixels(rgba: &[u8]) -> usize {
     rgba.as_chunks::<4>()
         .0
         .iter()
-        .filter(|px| px[0] > 175 && px[0] > px[1].saturating_add(55) && px[0] > px[2].saturating_add(80))
+        .filter(|px| {
+            px[0] > 175 && px[0] > px[1].saturating_add(55) && px[0] > px[2].saturating_add(80)
+        })
         .count()
 }
 
@@ -123,7 +127,8 @@ async fn procedural_relief_svs_renders_with_zero_drape_allocations_and_taws_band
         let side = 1_i32 << z;
         let cx = ((8.0 + 180.0) / 360.0 * f64::from(side)).floor() as i32;
         let lat_rad = 47.0_f64.to_radians();
-        let merc_y = (1.0 - (lat_rad.tan() + 1.0 / lat_rad.cos()).ln() / std::f64::consts::PI) * 0.5;
+        let merc_y =
+            (1.0 - (lat_rad.tan() + 1.0 / lat_rad.cos()).ln() / std::f64::consts::PI) * 0.5;
         let cy = (merc_y * f64::from(side)).floor() as i32;
         for dy in -1..=1 {
             for dx in -1..=1 {
@@ -140,7 +145,8 @@ async fn procedural_relief_svs_renders_with_zero_drape_allocations_and_taws_band
             }
         }
     }
-    map.load_dem_tiles(dem_tiles).expect("load synthetic ridge DEM");
+    map.load_dem_tiles(dem_tiles)
+        .expect("load synthetic ridge DEM");
     map.frame_input_mut().view =
         ViewSource::External(svs_external_view(46.88, 8.0, 3_100.0, -18.0, 960.0 / 540.0));
     map.run_frame().expect("first SVS frame");
@@ -160,10 +166,20 @@ async fn procedural_relief_svs_renders_with_zero_drape_allocations_and_taws_band
     else {
         panic!("TerrainResources must be initialized");
     };
-    assert!(terrain.scratch().is_none(), "DrapeScratch must not be allocated");
-    assert_eq!(terrain.drape_texture_total(), 0, "DrapeCache must hold 0 textures");
+    assert!(
+        terrain.scratch().is_none(),
+        "DrapeScratch must not be allocated"
+    );
+    assert_eq!(
+        terrain.drape_texture_total(),
+        0,
+        "DrapeCache must hold 0 textures"
+    );
     assert_eq!(terrain.drape_size(), 0);
-    assert!(!terrain.draws().is_empty(), "3D terrain tiles must be drawn in MAIN_PASS");
+    assert!(
+        !terrain.draws().is_empty(),
+        "3D terrain tiles must be drawn in MAIN_PASS"
+    );
 
     let (drape_bytes, dem_bytes) = terrain.texture_bytes();
     assert_eq!(drape_bytes, 0);
@@ -273,7 +289,8 @@ async fn resident_terrain_patch_exports_stitched_129x129_grid_and_drape_handle()
     map.run_frame().expect("procedural frame");
 
     let drawn_coords: Vec<WorldTileCoords> = {
-        let Some(Initialized(terrain)) = map.world().resources.get::<Eventually<TerrainResources>>()
+        let Some(Initialized(terrain)) =
+            map.world().resources.get::<Eventually<TerrainResources>>()
         else {
             panic!("terrain initialized");
         };

@@ -76,9 +76,7 @@ fn host_sun_replaces_the_style_light() {
             .expect("light should parse");
     // The sun stands over the camera's own center, 0°N 160°E.
     let sun = lat_lon_to_unit_sphere(LatLon::new(0.0, 160.0));
-    let expected = camera
-        .world_direction_to_view(sun)
-        .expect("view direction");
+    let expected = camera.world_direction_to_view(sun).expect("view direction");
 
     let from_host = AtmosphereLayerMetadata::from_view(
         &camera,

@@ -139,7 +139,9 @@ async fn lazy_map_read_and_zero_copy_color_and_depth_views() {
         vec![
             Box::new(RenderPlugin),
             Box::new(BackgroundPlugin),
-            Box::new(TerrainPlugin::<crate::terrain::transferables::DefaultDemTransferables>::default()),
+            Box::new(TerrainPlugin::<
+                crate::terrain::transferables::DefaultDemTransferables,
+            >::default()),
         ],
     )
     .expect("gpu-composited headless map");
@@ -201,10 +203,7 @@ async fn lazy_map_read_and_zero_copy_color_and_depth_views() {
         style2,
         renderer2,
         kernel2,
-        vec![
-            Box::new(RenderPlugin),
-            Box::new(HeadlessPlugin::new(false)),
-        ],
+        vec![Box::new(RenderPlugin), Box::new(HeadlessPlugin::new(false))],
     )
     .expect("capture map");
     assert!(!capture_map.has_readback_buffer());

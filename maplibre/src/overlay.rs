@@ -181,14 +181,14 @@ impl<E: Environment> Plugin<E> for OverlayPlugin {
             .insert(Eventually::<probes::ProbeGpu>::Uninitialized);
         schedule.add_system_to_stage(RenderStageLabel::Prepare, pipeline::prepare_system);
         schedule.add_system_to_stage(RenderStageLabel::Prepare, probes::prepare_system);
-        if let Some(callbacks) =
-            world.resources.get_mut::<crate::render::AfterSubmitCallbacks>()
+        if let Some(callbacks) = world
+            .resources
+            .get_mut::<crate::render::AfterSubmitCallbacks>()
         {
             callbacks.register(|world: &World| {
-                if let Some(crate::render::eventually::Eventually::Initialized(probes)) =
-                    world
-                        .resources
-                        .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
+                if let Some(crate::render::eventually::Eventually::Initialized(probes)) = world
+                    .resources
+                    .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
                 {
                     probes.after_submit();
                 }
@@ -196,10 +196,9 @@ impl<E: Environment> Plugin<E> for OverlayPlugin {
         } else {
             let mut callbacks = crate::render::AfterSubmitCallbacks::new();
             callbacks.register(|world: &World| {
-                if let Some(crate::render::eventually::Eventually::Initialized(probes)) =
-                    world
-                        .resources
-                        .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
+                if let Some(crate::render::eventually::Eventually::Initialized(probes)) = world
+                    .resources
+                    .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
                 {
                     probes.after_submit();
                 }

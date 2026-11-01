@@ -69,7 +69,11 @@ impl Orientation3d {
     /// - `heading_deg`: clockwise from true North (`0°` = North, `90°` = East).
     /// - `pitch_deg`: nose up (`+90°` = vertical climb, `-90°` = vertical dive).
     /// - `roll_deg`: right wing down (`+90°` = knife-edge right bank, `±180°` = inverted).
-    pub fn from_heading_pitch_roll_degrees(heading_deg: f64, pitch_deg: f64, roll_deg: f64) -> Self {
+    pub fn from_heading_pitch_roll_degrees(
+        heading_deg: f64,
+        pitch_deg: f64,
+        roll_deg: f64,
+    ) -> Self {
         let q_yaw = Quaternion::from_angle_z(Rad(-heading_deg.to_radians()));
         let q_pitch = Quaternion::from_angle_x(Rad(pitch_deg.to_radians()));
         let q_roll = Quaternion::from_angle_y(Rad(roll_deg.to_radians()));
@@ -263,7 +267,9 @@ impl Placement3d {
         let alt_msl = self.resolved_altitude_msl(ground_elevation_meters);
         let (east, north, up) = enu_axes_on_unit_sphere(self.position);
         let sphere_from_enu = Matrix3::from_cols(east, north, up);
-        let enu_from_body = self.effective_orientation(ground_normal_enu).to_rotation_matrix3();
+        let enu_from_body = self
+            .effective_orientation(ground_normal_enu)
+            .to_rotation_matrix3();
         let linear = (sphere_from_enu * enu_from_body) * (1.0 / body.radius_meters);
         let origin = up * body.unit_radius_at(alt_msl);
         Matrix4::from_cols(
@@ -309,7 +315,9 @@ impl Placement3d {
             Vector3::new(0.0, -px_per_m, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
         );
-        let enu_from_body = self.effective_orientation(ground_normal_enu).to_rotation_matrix3();
+        let enu_from_body = self
+            .effective_orientation(ground_normal_enu)
+            .to_rotation_matrix3();
         let linear = merc_from_enu * enu_from_body;
         Matrix4::from_cols(
             linear.x.extend(0.0),

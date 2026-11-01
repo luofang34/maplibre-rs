@@ -94,7 +94,10 @@ impl HeadlessMap {
             .world
             .resources
             .insert(SlotResidencyFloor::default());
-        self.map_context.world.resources.insert(CurrentViewSlot(None));
+        self.map_context
+            .world
+            .resources
+            .insert(CurrentViewSlot(None));
         self.map_context.world.resources.insert(EyeInFrame {
             index: 0,
             frame: frame_number,
@@ -125,12 +128,20 @@ impl HeadlessMap {
         });
         self.map_context.view_state = active[0].1.clone();
         if let SlotView::External(ext) = active[0].0.view {
-            let input = self.map_context.world.resources.get_or_init_mut::<FrameInput>();
+            let input = self
+                .map_context
+                .world
+                .resources
+                .get_or_init_mut::<FrameInput>();
             input.timestamp = frame.timestamp;
             input.view = ViewSource::External(ext);
             input.request_overscan = frame.request_overscan;
         } else {
-            let input = self.map_context.world.resources.get_or_init_mut::<FrameInput>();
+            let input = self
+                .map_context
+                .world
+                .resources
+                .get_or_init_mut::<FrameInput>();
             input.timestamp = frame.timestamp;
             input.view = ViewSource::MapView;
         }

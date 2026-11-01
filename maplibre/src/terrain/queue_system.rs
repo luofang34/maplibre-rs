@@ -35,20 +35,13 @@ pub(crate) mod edges;
 mod prefetch;
 mod readiness;
 mod targets;
-pub(crate) use targets::{procedural_specs, target_specs};
-
-pub(crate) fn uses_uniform_texture_covering(view_state: &ViewState) -> bool {
-    use cgmath::InnerSpace;
-    view_state.external_globe_eye().is_some_and(|eye| {
-        (eye.position.magnitude() - 1.0) * view_state.body().radius_meters >= 60_000.0
-    })
-}
+pub(crate) use targets::{procedural_specs, target_specs, uses_uniform_texture_covering};
 mod drape_phase;
 pub(crate) mod surface_covering;
 mod uniforms;
 use drape_phase::{background_clear_color, encode_drapes};
-pub(crate) use uniforms::TerrainEyeFrame;
 use uniforms::present_ancestors;
+pub(crate) use uniforms::TerrainEyeFrame;
 
 /// Divisor of the tile circumference giving the skirt drop, as in GL JS `getSkirtLength`.
 const SKIRT_DIVISOR: f64 = 5.0;
@@ -383,8 +376,10 @@ fn queue_tiles(
         else {
             return Err(SystemError::Dependencies);
         };
-        let uniforms::PreparedTerrain { mut uniforms, sources } =
-            uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
+        let uniforms::PreparedTerrain {
+            mut uniforms,
+            sources,
+        } = uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
         let edges = edge_cache.apply(&sources, &mut uniforms, &world.tiles);
         let (sources, placed) =
             uniforms::with_world_copies(&mut uniforms, sources, copies.as_ref(), view_state);

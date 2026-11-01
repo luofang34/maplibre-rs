@@ -100,9 +100,7 @@ struct BoundSlice {
 impl BoundSlice {
     #[inline]
     fn matches(&self, slice: &wgpu::BufferSlice<'_>) -> bool {
-        self.offset == slice.offset()
-            && self.size == slice.size()
-            && &self.buffer == slice.buffer()
+        self.offset == slice.offset() && self.size == slice.size() && &self.buffer == slice.buffer()
     }
 
     fn of(slice: &wgpu::BufferSlice<'_>) -> Self {
@@ -223,9 +221,7 @@ impl<'w> TrackedRenderPass<'w> {
             .bound
             .index_buffer
             .as_ref()
-            .is_some_and(|(bound, bound_format)| {
-                *bound_format == format && bound.matches(&slice)
-            });
+            .is_some_and(|(bound, bound_format)| *bound_format == format && bound.matches(&slice));
 
         if self.count(!is_same) {
             self.bound.index_buffer = Some((BoundSlice::of(&slice), format));

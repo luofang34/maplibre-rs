@@ -1,6 +1,13 @@
 //! Selects terrain textures and records their independent surface meshes.
 use super::*;
 
+pub(crate) fn uses_uniform_texture_covering(view_state: &ViewState) -> bool {
+    use cgmath::InnerSpace;
+    view_state.external_globe_eye().is_some_and(|eye| {
+        (eye.position.magnitude() - 1.0) * view_state.body().radius_meters >= 60_000.0
+    })
+}
+
 pub(crate) fn target_specs(
     style: &Style,
     view_state: &ViewState,

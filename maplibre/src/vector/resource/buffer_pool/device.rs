@@ -39,8 +39,7 @@ impl<V: Pod, I: Pod, TM: Pod, FM: Pod>
             mapped_at_creation: false,
         };
 
-        let (feature_logical, feature_physical) =
-            fitting(size_of::<FM>(), sizes.feature_metadata);
+        let (feature_logical, feature_physical) = fitting(size_of::<FM>(), sizes.feature_metadata);
         let feature_metadata_desc = wgpu::BufferDescriptor {
             label: Some("feature metadata buffer"),
             size: feature_physical,
@@ -57,18 +56,12 @@ impl<V: Pod, I: Pod, TM: Pod, FM: Pod>
         };
 
         BufferPool::new(
-            BackingBufferDescriptor::new(
-                device.create_buffer(&vertex_buffer_desc),
-                vertex_logical,
-            ),
+            BackingBufferDescriptor::new(device.create_buffer(&vertex_buffer_desc), vertex_logical),
             BackingBufferDescriptor::new(
                 device.create_buffer(&indices_buffer_desc),
                 indices_logical,
             ),
-            BackingBufferDescriptor::new(
-                device.create_buffer(&layer_metadata_desc),
-                layer_logical,
-            ),
+            BackingBufferDescriptor::new(device.create_buffer(&layer_metadata_desc), layer_logical),
             BackingBufferDescriptor::new(
                 device.create_buffer(&feature_metadata_desc),
                 feature_logical,

@@ -43,6 +43,8 @@ mod injected_loader;
 mod labels;
 pub mod multi_view;
 pub use error::HeadlessMapOperationError;
+#[cfg(feature = "experimental")]
+mod experimental;
 mod processed;
 mod provided_images;
 mod raster;
@@ -61,16 +63,17 @@ mod terrain_patch;
 mod vertical_perspective;
 mod xr;
 
-pub use processed::{
-    process_geojson_layers, process_geojson_layers_with_atlas, process_tile_layers,
-    process_tile_layers_with_atlas, ProcessedLayers, SymbolLayer, VectorLayer,
-};
 pub use multi_view::{
     CoveringPolicy, MultiViewError, MultiViewFrame, SlotView, ViewSlotConfig, ViewSlotEntry,
     ViewSlotId,
 };
+pub use processed::{
+    process_geojson_layers, process_geojson_layers_with_atlas, process_tile_layers,
+    process_tile_layers_with_atlas, ProcessedLayers, SymbolLayer, VectorLayer,
+};
 pub use terrain_patch::TerrainPatchSnapshot;
 pub use xr::XrFrameError;
+
 pub use crate::io::tile_json::resolve_tile_json_sources;
 
 /// A headless frame advances the frame clock by a nominal 60 Hz interval, so animated
@@ -392,36 +395,6 @@ impl HeadlessMap {
             .get_or_init_mut::<crate::render::memory_budget::MemoryBudgetTracker>()
             .update(available_bytes);
         resources.insert(budget);
-    }
-
-    /// Asks which of `probes` lie in sight; see [`HostOverlay::set_probes`](crate::overlay::HostOverlay::set_probes).
-    #[cfg(feature = "experimental")]
-    pub fn set_depth_probes(&mut self, probes: Vec<crate::overlay::DepthProbe>) -> u64 {
-        let request = self.map_context.world.resources
-            .get_or_init_mut::<crate::overlay::HostOverlay>()
-            .set_probes(probes);
-        crate::render::frame_signals::mark_dirty(&mut self.map_context.world);
-        request
-    }
-
-    /// The latest answered depth probes, once; see
-    /// [`HostOverlay::take_answers`](crate::overlay::HostOverlay::take_answers).
-    #[cfg(feature = "experimental")]
-    pub fn depth_probe_results(&mut self) -> Option<crate::overlay::ProbeResults> {
-        self.map_context.world.resources
-            .get_mut::<crate::overlay::HostOverlay>()?
-            .take_answers()
-    }
-
-    /// Replaces the triangles drawn over the map from the next frame on; see
-    /// [`overlay`](crate::overlay). Drawn only when the map has the
-    /// [`OverlayPlugin`](crate::overlay::OverlayPlugin).
-    #[cfg(feature = "experimental")]
-    pub fn set_overlay(&mut self, mesh: crate::overlay::OverlayMesh) {
-        self.map_context.world.resources
-            .get_or_init_mut::<crate::overlay::HostOverlay>()
-            .set(mesh);
-        crate::render::frame_signals::mark_dirty(&mut self.map_context.world);
     }
 
     /// Draws at `ratio` physical pixels per logical pixel: the view measures its viewport, and

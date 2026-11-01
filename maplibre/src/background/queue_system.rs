@@ -1,5 +1,14 @@
 //! Evaluates visible background paint and queues sky and atmosphere draws.
 
+pub(crate) use super::buffers::globe_tiles;
+pub use super::buffers::{BackgroundBuffers, BackgroundGpuBuffers};
+use super::{
+    buffers::{background_color, globe_tile_metadata, sky_metadata, world_rows},
+    render_commands::{
+        DrawAtmosphere, DrawBackground, DrawBackgroundPattern, DrawGlobeBackground,
+        DrawGlobeBackgroundPattern, DrawSky,
+    },
+};
 use crate::{
     context::MapContext,
     render::{
@@ -8,15 +17,6 @@ use crate::{
         shaders::{AtmosphereLayerMetadata, BackgroundLayerMetadata, ShaderTileMetadata},
     },
     tcs::system::{SystemError, SystemResult},
-};
-
-pub use super::buffers::{BackgroundBuffers, BackgroundGpuBuffers};
-pub(crate) use super::buffers::globe_tiles;
-use super::buffers::{background_color, globe_tile_metadata, sky_metadata, world_rows};
-
-use super::render_commands::{
-    DrawAtmosphere, DrawBackground, DrawBackgroundPattern, DrawGlobeBackground,
-    DrawGlobeBackgroundPattern, DrawSky,
 };
 
 /// How strongly the atmosphere is drawn this frame: as the style's `sky` blends it, or in full
@@ -41,8 +41,9 @@ pub fn atmosphere_blend(
             .is_some_and(|l| l.atmosphere),
     ));
     let sky_faded = if sky_blend > 0.0 {
-        let altitude_blend = globe_camera_for_view(view_state)
-            .map_or(0.0, |camera| super::altitude::altitude_blend_for_camera(&camera));
+        let altitude_blend = globe_camera_for_view(view_state).map_or(0.0, |camera| {
+            super::altitude::altitude_blend_for_camera(&camera)
+        });
         sky_blend * altitude_blend
     } else {
         0.0
@@ -250,9 +251,7 @@ pub fn queue_system(
         };
 
         let (buffer, tile_metadata_buffer, atmosphere_metadata_buffer, sky_metadata_buffer) = {
-            let gpu_buffers = world
-                .resources
-                .get_or_init_mut::<BackgroundGpuBuffers>();
+            let gpu_buffers = world.resources.get_or_init_mut::<BackgroundGpuBuffers>();
             gpu_buffers.write_metadata(&renderer.device, &renderer.queue, &metadatas);
             gpu_buffers.write_tile_metadata(&renderer.device, &renderer.queue, &tile_metadata);
             gpu_buffers.write_atmosphere(&renderer.device, &renderer.queue, &atmosphere_metadata);
@@ -292,4 +291,3 @@ pub fn queue_system(
 
     Ok(())
 }
-

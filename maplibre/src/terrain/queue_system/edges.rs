@@ -94,7 +94,8 @@ impl EdgeCache {
             self.update(signature, tiles);
         }
         let mut edges = Vec::with_capacity(sources.len());
-        for (index, ((_, tile, _), uniform)) in sources.iter().zip(uniforms.iter_mut()).enumerate() {
+        for (index, ((_, tile, _), uniform)) in sources.iter().zip(uniforms.iter_mut()).enumerate()
+        {
             let edge = self.samples.get(tile).copied().unwrap_or_default();
             uniform.edge_index = [index as f32, 0.0, 0.0, 0.0];
             edges.push(edge);

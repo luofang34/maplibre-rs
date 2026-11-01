@@ -38,10 +38,12 @@ pub(super) fn replay(
         .resources
         .get::<crate::render::settings::TerrainDrapeMode>()
         .copied()
-        .or_else(|| match world.resources.get::<Eventually<TerrainResources>>() {
-            Some(Initialized(terrain)) => Some(terrain.drape_mode()),
-            _ => None,
-        })
+        .or_else(
+            || match world.resources.get::<Eventually<TerrainResources>>() {
+                Some(Initialized(terrain)) => Some(terrain.drape_mode()),
+                _ => None,
+            },
+        )
         .unwrap_or_default();
     let projection = view.gpu_view_projection();
     if let Some(frame) = world.resources.get_mut::<TerrainEyeFrame>() {
@@ -229,20 +231,14 @@ pub(super) struct PreparedTerrain {
 /// The skirts and the host's sun the surface of every tile is drawn with this frame.
 pub(super) fn surface_settings(
     world: &World,
-) -> (
-    crate::terrain::TerrainSkirts,
-    crate::render::SceneLighting,
-) {
+) -> (crate::terrain::TerrainSkirts, crate::render::SceneLighting) {
     let skirts = world.resources.get::<crate::terrain::TerrainSkirts>();
     let lighting = world
         .resources
         .get::<crate::render::SceneLighting>()
         .copied()
         .unwrap_or_default();
-    (
-        skirts.copied().unwrap_or_default(),
-        lighting,
-    )
+    (skirts.copied().unwrap_or_default(), lighting)
 }
 
 pub(super) fn prepare_tiles(

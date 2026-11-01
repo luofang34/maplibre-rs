@@ -6,7 +6,10 @@
 //! `Map2D` MFD) to share a single `World`, `VectorBufferPool`, `DrapeScratch`, `DrapeCache`,
 //! and compiled pipeline set without tile or drape thrashing.
 
-use std::{collections::BTreeMap, collections::HashSet, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    time::Duration,
+};
 
 use thiserror::Error;
 
@@ -14,6 +17,7 @@ mod covering;
 mod execute;
 
 use covering::StereoSnapshot;
+
 pub use crate::render::eye_covering::ViewSlotId;
 use crate::{
     coords::{LatLon, WorldTileCoords, Zoom},
@@ -30,7 +34,6 @@ use crate::{
     tcs::world::World,
     window::PhysicalSize,
 };
-
 #[cfg(feature = "experimental")]
 use crate::{
     overlay::{DepthProbe, HostOverlay, OverlayGpu, OverlayMesh, ProbeGpu, ProbeResults},
@@ -190,8 +193,14 @@ struct MultiViewRegistry {
 
 fn swap_slot_resources(slot: &mut SlotState, renderer: &mut Renderer, world: &mut World) {
     std::mem::swap(&mut slot.surface, &mut renderer.resources.surface);
-    std::mem::swap(&mut slot.depth_readout, &mut renderer.settings.depth_readout);
-    std::mem::swap(&mut slot.depth_texture, &mut renderer.resources.depth_texture);
+    std::mem::swap(
+        &mut slot.depth_readout,
+        &mut renderer.settings.depth_readout,
+    );
+    std::mem::swap(
+        &mut slot.depth_texture,
+        &mut renderer.resources.depth_texture,
+    );
     std::mem::swap(
         &mut slot.depth_readout_texture,
         &mut renderer.resources.depth_readout_texture,
