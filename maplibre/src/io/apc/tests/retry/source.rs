@@ -87,6 +87,13 @@ impl Source {
                 stream.write_all(&body).await.expect("response body");
             }
         });
+        let handler = Self::make_handler(
+            gate.clone(),
+            requests.clone(),
+            healthy.clone(),
+            response.clone(),
+        );
+        crate::platform::http_client::register_in_process_handler(url.clone(), handler);
         Self {
             url,
             response,
@@ -95,6 +102,78 @@ impl Source {
             task,
             gate,
         }
+    }
+
+    fn make_handler(
+        gate: Arc<Gate>,
+        requests: Arc<Mutex<Vec<String>>>,
+        healthy: Arc<Mutex<Response>>,
+        response: Arc<Mutex<Response>>,
+    ) -> crate::platform::http_client::InProcessHandler {
+        Arc::new(move |url: &str, range: Option<crate::io::source_client::ByteRange>| {
+            let gate = gate.clone();
+            let requests = requests.clone();
+            let healthy = healthy.clone();
+            let response = response.clone();
+            let url_owned = url.to_owned();
+
+            Box::pin(async move {
+                let request = format!("GET {url_owned} HTTP/1.1\r\n\r\n");
+                requests.lock().expect("request log").push(request.clone());
+
+                if request.contains("/unstable/") && gate.blocked.swap(false, Ordering::SeqCst) {
+                    gate.entered.notify_one();
+                    gate.release.notified().await;
+                }
+
+                let resp = if request.contains("/healthy/") {
+                    healthy.lock().expect("healthy response").clone()
+                } else {
+                    response.lock().expect("response").clone()
+                };
+
+                if matches!(resp, Response::Disconnect) {
+                    return Err(crate::io::source_client::SourceFetchError::temporary(
+                        std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "connection closed before message completed",
+                        ),
+                    ));
+                }
+
+                let (status, body) = match resp {
+                    Response::Status(status) => (status, Vec::new()),
+                    Response::Image => (200, png()),
+                    Response::Corrupt => (200, vec![255]),
+                    Response::Bytes(bytes) => (200, bytes),
+                    Response::Disconnect => unreachable!(),
+                };
+
+                if status == 404 {
+                    return Err(crate::io::source_client::SourceFetchError::not_found(
+                        &url_owned,
+                    ));
+                }
+
+                if (400..600).contains(&status) {
+                    #[derive(Debug, thiserror::Error)]
+                    #[error("HTTP status {0}")]
+                    struct MockStatusError(u16);
+
+                    return Err(crate::io::source_client::SourceFetchError::http_response(
+                        &url_owned,
+                        status,
+                        MockStatusError(status),
+                    ));
+                }
+
+                if let Some(range) = range {
+                    range.slice(&url_owned, &body).map(<[u8]>::to_vec)
+                } else {
+                    Ok(body)
+                }
+            })
+        })
     }
     pub fn block_unstable(&self) -> Arc<Gate> {
         self.gate.blocked.store(true, Ordering::SeqCst);
@@ -130,6 +209,7 @@ impl Source {
 
 impl Drop for Source {
     fn drop(&mut self) {
+        crate::platform::http_client::unregister_in_process_handler(&self.url);
         self.task.abort();
     }
 }

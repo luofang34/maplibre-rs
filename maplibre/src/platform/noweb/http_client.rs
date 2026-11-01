@@ -86,6 +86,35 @@ impl HttpClient for ReqwestHttpClient {
     }
 }
 
+/// An in-process HTTP handler for local test servers when network sockets are unavailable.
+pub type InProcessHandler = std::sync::Arc<
+    dyn Fn(
+            &str,
+            Option<ByteRange>,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<Vec<u8>, SourceFetchError>> + Send>,
+        > + Send
+        + Sync,
+>;
+
+static IN_PROCESS_HANDLERS: std::sync::RwLock<Vec<(String, InProcessHandler)>> =
+    std::sync::RwLock::new(Vec::new());
+
+/// Registers an in-process handler for URLs matching `prefix`.
+pub fn register_in_process_handler(prefix: String, handler: InProcessHandler) {
+    if let Ok(mut handlers) = IN_PROCESS_HANDLERS.write() {
+        handlers.retain(|(p, _)| p != &prefix);
+        handlers.push((prefix, handler));
+    }
+}
+
+/// Unregisters an in-process handler by `prefix`.
+pub fn unregister_in_process_handler(prefix: &str) {
+    if let Ok(mut handlers) = IN_PROCESS_HANDLERS.write() {
+        handlers.retain(|(p, _)| p != prefix);
+    }
+}
+
 impl ReqwestHttpClient {
     /// A server that ignores the range answers with the whole body, cut down here.
     async fn get(&self, url: &str, range: Option<ByteRange>) -> Result<Vec<u8>, SourceFetchError> {
@@ -93,7 +122,23 @@ impl ReqwestHttpClient {
         if let Some(range) = range {
             request = request.header(reqwest::header::RANGE, range.header());
         }
-        let response = request.send().await?;
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(err) => {
+                let handler = {
+                    let handlers = IN_PROCESS_HANDLERS.read().ok();
+                    handlers.and_then(|h| {
+                        h.iter()
+                            .find(|(prefix, _)| url.starts_with(prefix))
+                            .map(|(_, handler)| handler.clone())
+                    })
+                };
+                if let Some(handler) = handler {
+                    return handler(url, range).await;
+                }
+                return Err(err.into());
+            }
+        };
         if response.status() == StatusCode::NOT_FOUND {
             return Err(SourceFetchError::not_found(url));
         }

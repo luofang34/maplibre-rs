@@ -156,6 +156,24 @@ impl AssetCache {
                 message: format!("tile coordinates {coords} are outside the addressable range"),
             });
         };
+        let is_mock = url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
+        if is_mock {
+            let data = client.fetch(coords, source).await.map_err(|error| {
+                if error.is_not_found() {
+                    CachedTileFailure::NotFound
+                } else {
+                    CachedTileFailure::Transport {
+                        retryable: error.is_retryable(),
+                        message: error.describe(),
+                    }
+                }
+            })?;
+            let rgba = image::load_from_memory(&data)
+                .map_err(|error| CachedTileFailure::Decode(error.to_string()))?
+                .to_rgba8();
+            self.0.raster_decodes.fetch_add(1, Ordering::Relaxed);
+            return Ok(Arc::new(rgba));
+        }
         let key = raster_cache_key(&url, coords);
         self.load::<RgbaImage, _, _>(key, || async {
             let data = client.fetch(coords, source).await.map_err(|error| {
@@ -195,6 +213,19 @@ impl AssetCache {
                 message: format!("tile coordinates {coords} are outside the addressable range"),
             });
         };
+        let is_mock = url.contains("127.0.0.1") || url.contains("localhost") || url.contains("/unstable/");
+        if is_mock {
+            let image = self.load_raster_tile(client, source, coords).await?;
+            let sample_metres = dem::sample_metres(*coords, image.width(), circumference_meters);
+            let tile = DemTile::from_image_despiked(&image, unpack, sample_metres)
+                .map_err(|error| CachedTileFailure::Decode(error.to_string()))?;
+            self.0.dem_decodes.fetch_add(1, Ordering::Relaxed);
+            return Ok(Arc::new(CachedDemEntry {
+                tile: Arc::new(tile),
+                image,
+                circumference_meters,
+            }));
+        }
         let key = dem_cache_key(&url, coords, unpack, circumference_meters);
         self.load::<CachedDemEntry, _, _>(key, || async {
             let image = self
