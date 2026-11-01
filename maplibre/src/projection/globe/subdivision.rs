@@ -130,7 +130,7 @@ where
     sanitize_pole_sentinels(&mut buffer.vertices);
     let input = buffer.indices[index_start..].to_vec();
     buffer.indices.truncate(index_start);
-    let mut vertices = HashMap::new();
+    let mut vertices = HashMap::with_capacity(input.len());
     for triangle in input.as_chunks::<3>().0 {
         let points = triangle_points(&buffer.vertices, triangle)?;
         subdivide_triangle(
@@ -185,6 +185,57 @@ fn triangle_points<I: Copy + Into<u32>>(
     Ok(points)
 }
 
+const MAX_CLIPPED_POLYGON_VERTICES: usize = 16;
+
+/// Stack-allocated polygon buffer avoiding heap allocations during Sutherland-Hodgman clipping.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct InlinePolygon {
+    vertices: [[f32; 2]; MAX_CLIPPED_POLYGON_VERTICES],
+    len: usize,
+}
+
+impl InlinePolygon {
+    #[inline]
+    pub(crate) fn empty() -> Self {
+        Self {
+            vertices: [[0.0; 2]; MAX_CLIPPED_POLYGON_VERTICES],
+            len: 0,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_triangle(triangle: [[f32; 2]; 3]) -> Self {
+        let mut vertices = [[0.0; 2]; MAX_CLIPPED_POLYGON_VERTICES];
+        vertices[0] = triangle[0];
+        vertices[1] = triangle[1];
+        vertices[2] = triangle[2];
+        Self { vertices, len: 3 }
+    }
+
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[[f32; 2]] {
+        &self.vertices[..self.len]
+    }
+
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    #[inline]
+    pub(crate) fn push(&mut self, point: [f32; 2]) {
+        if self.len < MAX_CLIPPED_POLYGON_VERTICES {
+            self.vertices[self.len] = point;
+            self.len += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn clear(&mut self) {
+        self.len = 0;
+    }
+}
+
 fn subdivide_triangle<I>(
     buffer: &mut VertexBuffers<ShaderVertex, I>,
     triangle: [[f32; 2]; 3],
@@ -203,14 +254,24 @@ where
             limit: MAX_CELLS_PER_TRIANGLE,
         });
     }
+    let mut poly_b = InlinePolygon::empty();
     for y in bounds.2..bounds.3 {
         for x in bounds.0..bounds.1 {
-            let mut polygon = triangle.to_vec();
-            polygon = clip_axis(polygon, 0, x as f32 * cell_size, true);
-            polygon = clip_axis(polygon, 0, (x + 1) as f32 * cell_size, false);
-            polygon = clip_axis(polygon, 1, y as f32 * cell_size, true);
-            polygon = clip_axis(polygon, 1, (y + 1) as f32 * cell_size, false);
-            append_polygon(buffer, polygon, clip_x_to_tile, cache);
+            let mut poly_a = InlinePolygon::from_triangle(triangle);
+            clip_axis_into(&poly_a, &mut poly_b, 0, x as f32 * cell_size, true);
+            if poly_b.len() < 3 {
+                continue;
+            }
+            clip_axis_into(&poly_b, &mut poly_a, 0, (x + 1) as f32 * cell_size, false);
+            if poly_a.len() < 3 {
+                continue;
+            }
+            clip_axis_into(&poly_a, &mut poly_b, 1, y as f32 * cell_size, true);
+            if poly_b.len() < 3 {
+                continue;
+            }
+            clip_axis_into(&poly_b, &mut poly_a, 1, (y + 1) as f32 * cell_size, false);
+            append_polygon(buffer, poly_a.as_slice(), clip_x_to_tile, cache);
         }
     }
     Ok(())
@@ -241,17 +302,19 @@ fn triangle_bounds(triangle: [[f32; 2]; 3], cell_size: f32) -> (i64, i64, i64, i
     )
 }
 
-fn clip_axis(
-    input: Vec<[f32; 2]>,
+pub(crate) fn clip_axis_into(
+    input: &InlinePolygon,
+    output: &mut InlinePolygon,
     axis: usize,
     boundary: f32,
     keep_greater: bool,
-) -> Vec<[f32; 2]> {
-    let Some(mut previous) = input.last().copied() else {
-        return input;
+) {
+    output.clear();
+    let slice = input.as_slice();
+    let Some(mut previous) = slice.last().copied() else {
+        return;
     };
-    let mut output = Vec::with_capacity(input.len() + 1);
-    for current in input {
+    for &current in slice {
         let previous_inside = (previous[axis] >= boundary) == keep_greater;
         let current_inside = (current[axis] >= boundary) == keep_greater;
         if previous_inside != current_inside {
@@ -262,7 +325,6 @@ fn clip_axis(
         }
         previous = current;
     }
-    output
 }
 
 fn axis_intersection(start: [f32; 2], end: [f32; 2], axis: usize, boundary: f32) -> [f32; 2] {
@@ -277,7 +339,7 @@ fn axis_intersection(start: [f32; 2], end: [f32; 2], axis: usize, boundary: f32)
 
 fn append_polygon<I: From<VertexId>>(
     buffer: &mut VertexBuffers<ShaderVertex, I>,
-    polygon: Vec<[f32; 2]>,
+    polygon: &[[f32; 2]],
     clip_x_to_tile: bool,
     cache: &mut HashMap<(i32, i32), usize>,
 ) {

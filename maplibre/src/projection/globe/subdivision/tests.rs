@@ -124,3 +124,41 @@ fn subdivision_preserves_fractional_road_alignment() {
     assert!(points.len() > 1);
     assert!(points.iter().all(|point| point[1] == start[1]));
 }
+
+#[test]
+fn inline_polygon_clipping_ping_pong_produces_clipped_quad() {
+    use super::{clip_axis_into, InlinePolygon};
+
+    let triangle = [[0.0, 0.0], [4096.0, 0.0], [0.0, 4096.0]];
+    let poly_a = InlinePolygon::from_triangle(triangle);
+    let mut poly_b = InlinePolygon::empty();
+    let mut poly_c = InlinePolygon::empty();
+
+    // Clip x >= 1024
+    clip_axis_into(&poly_a, &mut poly_b, 0, 1024.0, true);
+    assert_eq!(poly_b.len(), 3);
+
+    // Clip x <= 2048
+    clip_axis_into(&poly_b, &mut poly_c, 0, 2048.0, false);
+    assert_eq!(poly_c.len(), 4);
+
+    // Ping pong back to poly_b: Clip y >= 512
+    clip_axis_into(&poly_c, &mut poly_b, 1, 512.0, true);
+    assert!(poly_b.len() >= 3);
+}
+
+#[test]
+fn inline_polygon_capacity_guard_and_clearing() {
+    use super::{InlinePolygon, MAX_CLIPPED_POLYGON_VERTICES};
+
+    let mut poly = InlinePolygon::empty();
+    assert_eq!(poly.len(), 0);
+
+    for i in 0..MAX_CLIPPED_POLYGON_VERTICES + 5 {
+        poly.push([i as f32, i as f32]);
+    }
+    assert_eq!(poly.len(), MAX_CLIPPED_POLYGON_VERTICES);
+
+    poly.clear();
+    assert_eq!(poly.len(), 0);
+}

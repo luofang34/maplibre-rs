@@ -7,7 +7,8 @@ use thiserror::Error;
 use crate::{
     coords::{WorldTileCoords, ZOOM_BOUNDS},
     projection::globe::tile_mesh::{
-        create_tile_mesh, TileIndexType, TileMeshError, TileMeshIndices, TileMeshOptions,
+        create_tile_mesh_into, TileIndexType, TileMeshError, TileMeshIndicesRef, TileMeshOptions,
+        TileMeshScratch,
     },
 };
 
@@ -81,9 +82,20 @@ pub enum GpuTileMeshError {
 #[derive(Default)]
 pub struct GlobeTileMeshCache {
     meshes: HashMap<TileMeshKey, GpuTileMesh>,
+    scratch: TileMeshScratch,
 }
 
 impl GlobeTileMeshCache {
+    /// Creates a new empty tile mesh cache.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns a reference to the reusable scratch buffer.
+    pub fn scratch(&self) -> &TileMeshScratch {
+        &self.scratch
+    }
+
     /// Creates the mesh variant needed by a draw if it is not cached.
     pub fn prepare(
         &mut self,
@@ -97,7 +109,8 @@ impl GlobeTileMeshCache {
         if self.meshes.contains_key(&key) {
             return Ok(());
         }
-        let mesh = create_tile_mesh(
+        let views = create_tile_mesh_into(
+            &mut self.scratch,
             TileMeshOptions {
                 granularity: key.granularity,
                 generate_borders: key.generate_borders,
@@ -107,17 +120,17 @@ impl GlobeTileMeshCache {
             TileIndexType::U16,
         )
         .map_err(|source| GpuTileMeshError::Generate { source })?;
-        let index_count = u32::try_from(mesh.indices.len())
+        let index_count = u32::try_from(views.indices.len())
             .map_err(|source| GpuTileMeshError::IndexCount { source })?;
         let vertex_buffer = queue.create_buffer_init(
             device,
             &wgpu::util::BufferInitDescriptor {
                 label: Some("globe tile mesh vertices"),
-                contents: bytemuck::cast_slice(&mesh.vertices),
+                contents: bytemuck::cast_slice(views.vertices),
                 usage: wgpu::BufferUsages::VERTEX,
             },
         );
-        let (index_buffer, index_format) = upload_indices(device, queue, mesh.indices);
+        let (index_buffer, index_format) = upload_indices(device, queue, views.indices);
         self.meshes.insert(
             key,
             GpuTileMesh {
@@ -144,11 +157,11 @@ impl GlobeTileMeshCache {
 fn upload_indices(
     device: &wgpu::Device,
     queue: &crate::render::upload_queue::UploadQueue,
-    indices: TileMeshIndices,
+    indices: TileMeshIndicesRef<'_>,
 ) -> (wgpu::Buffer, wgpu::IndexFormat) {
-    let (bytes, format) = match &indices {
-        TileMeshIndices::U16(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint16),
-        TileMeshIndices::U32(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint32),
+    let (bytes, format) = match indices {
+        TileMeshIndicesRef::U16(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint16),
+        TileMeshIndicesRef::U32(values) => (bytemuck::cast_slice(values), wgpu::IndexFormat::Uint32),
     };
     let buffer = queue.create_buffer_init(
         device,

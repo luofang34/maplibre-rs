@@ -90,6 +90,69 @@ impl TileMeshIndices {
     }
 }
 
+/// Pre-allocated scratch buffers for generating regular globe tile meshes without heap allocations.
+#[derive(Clone, Debug, Default)]
+pub struct TileMeshScratch {
+    /// Reusable vertex buffer.
+    pub vertices: Vec<TileMeshVertex>,
+    /// Reusable 16-bit index buffer.
+    pub indices_u16: Vec<u16>,
+    /// Reusable 32-bit index buffer.
+    pub indices_u32: Vec<u32>,
+}
+
+impl TileMeshScratch {
+    /// Creates an empty scratch buffer instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Clears stored vertices and indices while retaining allocated capacity.
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.indices_u16.clear();
+        self.indices_u32.clear();
+    }
+}
+
+/// Borrowed triangle indices from a [`TileMeshScratch`] buffer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TileMeshIndicesRef<'a> {
+    /// Sixteen-bit triangle indices.
+    U16(&'a [u16]),
+    /// Thirty-two-bit triangle indices.
+    U32(&'a [u32]),
+}
+
+impl<'a> TileMeshIndicesRef<'a> {
+    /// Returns the number of stored indices.
+    pub fn len(&self) -> usize {
+        match self {
+            Self::U16(indices) => indices.len(),
+            Self::U32(indices) => indices.len(),
+        }
+    }
+
+    /// Returns whether no indices are stored.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns whether indices require the 32-bit GPU index format.
+    pub fn uses_u32(&self) -> bool {
+        matches!(self, Self::U32(_))
+    }
+}
+
+/// Borrowed views of vertex and index slices within a [`TileMeshScratch`].
+#[derive(Clone, Copy, Debug)]
+pub struct TileMeshViews<'a> {
+    /// Signed tile-local vertex positions.
+    pub vertices: &'a [TileMeshVertex],
+    /// Triangle indices matching MapLibre GL JS winding.
+    pub indices: TileMeshIndicesRef<'a>,
+}
+
 /// CPU-side tile mesh ready for upload to vertex and index buffers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TileMesh {
@@ -147,6 +210,24 @@ pub fn create_tile_mesh(
     options: TileMeshOptions,
     index_type: TileIndexType,
 ) -> Result<TileMesh, TileMeshError> {
+    let mut scratch = TileMeshScratch::default();
+    let views = create_tile_mesh_into(&mut scratch, options, index_type)?;
+    let indices = match views.indices {
+        TileMeshIndicesRef::U16(_) => TileMeshIndices::U16(scratch.indices_u16),
+        TileMeshIndicesRef::U32(_) => TileMeshIndices::U32(scratch.indices_u32),
+    };
+    Ok(TileMesh {
+        vertices: scratch.vertices,
+        indices,
+    })
+}
+
+/// Populates `scratch` with a regular tile mesh without reallocating vectors when capacity suffices.
+pub fn create_tile_mesh_into(
+    scratch: &mut TileMeshScratch,
+    options: TileMeshOptions,
+    index_type: TileIndexType,
+) -> Result<TileMeshViews<'_>, TileMeshError> {
     let dimensions = mesh_dimensions(options)?;
     let vertex_count = dimensions
         .vertices_x
@@ -162,9 +243,37 @@ pub fn create_tile_mesh(
     }
 
     let use_u32 = index_type == TileIndexType::U32 || vertex_count > MAX_U16_VERTEX_COUNT;
-    let vertices = create_vertices(options, dimensions, vertex_count)?;
-    let indices = create_indices(dimensions, use_u32)?;
-    Ok(TileMesh { vertices, indices })
+    create_vertices_into(&mut scratch.vertices, options, dimensions, vertex_count)?;
+
+    let index_count = dimensions
+        .quads_x
+        .checked_mul(dimensions.quads_y)
+        .and_then(|count| count.checked_mul(6))
+        .ok_or(TileMeshError::DimensionOverflow {
+            granularity: dimensions.granularity as u32,
+        })?;
+    let capacity =
+        usize::try_from(index_count).map_err(|source| TileMeshError::CountConversion { source })?;
+
+    if use_u32 {
+        scratch.indices_u16.clear();
+        fill_indices_into(&mut scratch.indices_u32, dimensions, capacity, |index| {
+            index as u32
+        });
+        Ok(TileMeshViews {
+            vertices: &scratch.vertices,
+            indices: TileMeshIndicesRef::U32(&scratch.indices_u32),
+        })
+    } else {
+        scratch.indices_u32.clear();
+        fill_indices_into(&mut scratch.indices_u16, dimensions, capacity, |index| {
+            index as u16
+        });
+        Ok(TileMeshViews {
+            vertices: &scratch.vertices,
+            indices: TileMeshIndicesRef::U16(&scratch.indices_u16),
+        })
+    }
 }
 
 fn mesh_dimensions(options: TileMeshOptions) -> Result<MeshDimensions, TileMeshError> {
@@ -201,14 +310,16 @@ fn mesh_dimensions(options: TileMeshOptions) -> Result<MeshDimensions, TileMeshE
     })
 }
 
-fn create_vertices(
+fn create_vertices_into(
+    vertices: &mut Vec<TileMeshVertex>,
     options: TileMeshOptions,
     dimensions: MeshDimensions,
     vertex_count: u64,
-) -> Result<Vec<TileMeshVertex>, TileMeshError> {
+) -> Result<(), TileMeshError> {
     let capacity = usize::try_from(vertex_count)
         .map_err(|source| TileMeshError::CountConversion { source })?;
-    let mut vertices = Vec::with_capacity(capacity);
+    vertices.clear();
+    vertices.reserve(capacity);
     for y in dimensions.offset_y..=dimensions.end_y {
         for x in dimensions.offset_x..=dimensions.end_x {
             vertices.push(TileMeshVertex {
@@ -217,7 +328,7 @@ fn create_vertices(
             });
         }
     }
-    Ok(vertices)
+    Ok(())
 }
 
 fn vertex_x(axis: i64, granularity: i64) -> i16 {
@@ -248,39 +359,16 @@ fn vertex_y(axis: i64, granularity: i64, options: TileMeshOptions) -> i16 {
     }
 }
 
-fn create_indices(
+fn fill_indices_into<I, F>(
+    indices: &mut Vec<I>,
     dimensions: MeshDimensions,
-    use_u32: bool,
-) -> Result<TileMeshIndices, TileMeshError> {
-    let index_count = dimensions
-        .quads_x
-        .checked_mul(dimensions.quads_y)
-        .and_then(|count| count.checked_mul(6))
-        .ok_or(TileMeshError::DimensionOverflow {
-            granularity: dimensions.granularity as u32,
-        })?;
-    let capacity =
-        usize::try_from(index_count).map_err(|source| TileMeshError::CountConversion { source })?;
-    if use_u32 {
-        Ok(TileMeshIndices::U32(fill_indices(
-            dimensions,
-            capacity,
-            |index| index as u32,
-        )))
-    } else {
-        Ok(TileMeshIndices::U16(fill_indices(
-            dimensions,
-            capacity,
-            |index| index as u16,
-        )))
-    }
-}
-
-fn fill_indices<I, F>(dimensions: MeshDimensions, capacity: usize, convert: F) -> Vec<I>
-where
+    capacity: usize,
+    convert: F,
+) where
     F: Fn(u64) -> I,
 {
-    let mut indices = Vec::with_capacity(capacity);
+    indices.clear();
+    indices.reserve(capacity);
     for y in 0..dimensions.quads_y {
         for x in 0..dimensions.quads_x {
             let v0 = x + y * dimensions.vertices_x;
@@ -292,7 +380,6 @@ where
             }
         }
     }
-    indices
 }
 
 #[cfg(test)]

@@ -64,3 +64,12 @@ fn pole_extensions_follow_first_and_last_rows() {
     assert!(!south.extend_to_north_pole);
     assert!(south.extend_to_south_pole);
 }
+
+#[test]
+fn globe_tile_mesh_cache_scratch_is_available() {
+    use super::GlobeTileMeshCache;
+
+    let cache = GlobeTileMeshCache::new();
+    assert_eq!(cache.scratch().vertices.len(), 0);
+    assert_eq!(cache.scratch().indices_u16.len(), 0);
+}

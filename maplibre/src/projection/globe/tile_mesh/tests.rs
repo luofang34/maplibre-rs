@@ -201,3 +201,71 @@ fn every_triangle_index_addresses_a_vertex() {
         .iter()
         .all(|index| usize::from(*index) < mesh.vertices.len()));
 }
+
+#[test]
+fn scratch_reuse_preserves_capacity_across_mesh_generations() {
+    use super::{create_tile_mesh_into, TileMeshScratch};
+
+    let mut scratch = TileMeshScratch::new();
+    let options_large = TileMeshOptions {
+        granularity: 16,
+        generate_borders: true,
+        extend_to_north_pole: true,
+        extend_to_south_pole: true,
+    };
+    let views_large = create_tile_mesh_into(&mut scratch, options_large, TileIndexType::Auto)
+        .expect("large mesh should succeed");
+    assert!(!views_large.indices.is_empty());
+    assert!(!views_large.indices.uses_u32());
+
+    let vertex_cap = scratch.vertices.capacity();
+    let index_cap = scratch.indices_u16.capacity();
+
+    // Generate smaller mesh using the same scratch
+    let options_small = TileMeshOptions {
+        granularity: 4,
+        generate_borders: false,
+        extend_to_north_pole: false,
+        extend_to_south_pole: false,
+    };
+    let views_small = create_tile_mesh_into(&mut scratch, options_small, TileIndexType::Auto)
+        .expect("small mesh should succeed");
+    assert_eq!(views_small.vertices.len(), 25);
+    assert_eq!(views_small.indices.len(), 96);
+
+    // Verify capacities were preserved and no reallocations occurred
+    assert_eq!(scratch.vertices.capacity(), vertex_cap);
+    assert_eq!(scratch.indices_u16.capacity(), index_cap);
+
+    // Also test clearing
+    scratch.clear();
+    assert_eq!(scratch.vertices.len(), 0);
+    assert_eq!(scratch.indices_u16.len(), 0);
+    assert_eq!(scratch.indices_u32.len(), 0);
+    assert_eq!(scratch.vertices.capacity(), vertex_cap);
+    assert_eq!(scratch.indices_u16.capacity(), index_cap);
+}
+
+#[test]
+fn scratch_produces_identical_output_to_create_tile_mesh() {
+    use super::{create_tile_mesh_into, TileMeshIndicesRef, TileMeshScratch};
+
+    let options = TileMeshOptions {
+        granularity: 8,
+        generate_borders: true,
+        extend_to_north_pole: true,
+        extend_to_south_pole: true,
+    };
+    let standalone = create_tile_mesh(options, TileIndexType::Auto).expect("mesh");
+    let mut scratch = TileMeshScratch::default();
+    let views = create_tile_mesh_into(&mut scratch, options, TileIndexType::Auto).expect("views");
+
+    assert_eq!(views.vertices, standalone.vertices.as_slice());
+    let TileMeshIndices::U16(expected_indices) = &standalone.indices else {
+        panic!("expected u16");
+    };
+    let TileMeshIndicesRef::U16(actual_indices) = views.indices else {
+        panic!("expected u16");
+    };
+    assert_eq!(actual_indices, expected_indices.as_slice());
+}
