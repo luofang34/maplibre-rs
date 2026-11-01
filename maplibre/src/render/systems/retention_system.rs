@@ -263,11 +263,6 @@ pub(crate) fn tiles_in_use(
             for coords in requested.iter() {
                 in_use.insert(coords);
                 in_use.insert(clamp_to_max_zoom(coords, max_zoom));
-                let mut current = coords;
-                while let Some(parent) = current.get_parent() {
-                    in_use.insert(parent);
-                    current = parent;
-                }
             }
         }
         Ok(None) => {}

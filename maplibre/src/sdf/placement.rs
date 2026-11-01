@@ -389,11 +389,10 @@ impl Placement<'_> {
     fn tile_units(&self) -> f64 {
         let count = 2_f64.powi(i32::from(u8::from(self.coords.z)));
         let y = (f64::from(self.coords.y) + self.anchor[1] / 4096.0) / count;
-        let cos_lat = (1.0 / (std::f64::consts::PI * (1.0 - 2.0 * y)).cosh()).clamp(0.08627, 1.0);
-        let globe_scale = (f64::from(self.projection.globe_circle[0]) / cos_lat).clamp(0.25, 4.0);
+        let cos_lat = 1.0 / (std::f64::consts::PI * (1.0 - 2.0 * y)).cosh();
         8.0 * self.view.style_zoom().scale_to_tile(&self.coords)
             * (1.0 - f64::from(self.projection.transition)
-                + f64::from(self.projection.transition) * globe_scale)
+                + f64::from(self.projection.transition) / cos_lat.max(1e-6))
     }
 }
 

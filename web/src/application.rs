@@ -203,5 +203,7 @@ pub fn default_plugins(style: &Style) -> Vec<MapPlugin> {
             platform::UsedDemTransferables,
         >::default()));
     }
+    #[cfg(debug_assertions)]
+    plugins.push(Box::<maplibre::debug::DebugPlugin>::default());
     plugins
 }
