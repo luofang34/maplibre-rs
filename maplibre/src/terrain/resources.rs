@@ -23,6 +23,8 @@ use crate::{
 mod bindings;
 mod drapes;
 mod elevation_textures;
+#[cfg(test)]
+mod tests;
 
 use elevation_textures::DemTexture;
 
@@ -38,6 +40,20 @@ const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() as u64 <= UNIFO
 const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() == 480);
 /// Largest number of terrain tiles drawn in one frame.
 const UNIFORM_CAPACITY: u64 = 1024;
+/// One row of the edge height texture: a tile's [`EdgeHeights`](super::queue_system::edges::EdgeHeights).
+const EDGE_BYTES_PER_TILE: u32 =
+    std::mem::size_of::<super::queue_system::edges::EdgeHeights>() as u32;
+/// Edge height texels per tile, four edges to the texel.
+const EDGE_TEXELS_PER_TILE: u32 = EDGE_BYTES_PER_TILE / std::mem::size_of::<[f32; 4]>() as u32;
+
+/// The edge height texture's extent for `tiles` tiles, one row each.
+fn edge_texture_size(tiles: u32) -> wgpu::Extent3d {
+    wgpu::Extent3d {
+        width: EDGE_TEXELS_PER_TILE,
+        height: tiles,
+        depth_or_array_layers: 1,
+    }
+}
 
 /// Per-tile inputs of the terrain shaders, one block per drawn tile.
 #[repr(C)]
@@ -148,7 +164,8 @@ pub struct TerrainResources {
     /// frame is a hundred a frame, and on Metal the memory behind them is returned only
     /// slowly, so the footprint climbs for as long as the map is looked at.
     bind_groups: HashMap<(wgpu::Texture, wgpu::Texture), Arc<wgpu::BindGroup>>,
-    edge_buffer: wgpu::Buffer,
+    edge_texture: wgpu::Texture,
+    edge_view: wgpu::TextureView,
     msaa: Msaa,
     color_format: wgpu::TextureFormat,
     depth_format: wgpu::TextureFormat,
@@ -220,13 +237,17 @@ impl TerrainResources {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let edge_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("terrain edge storage"),
-            size: (std::mem::size_of::<super::queue_system::edges::EdgeHeights>() as u64)
-                * UNIFORM_CAPACITY,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+        let edge_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("terrain edge heights"),
+            size: edge_texture_size(UNIFORM_CAPACITY as u32),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
+        let edge_view = edge_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -263,7 +284,8 @@ impl TerrainResources {
             drape_scratch: None,
             draws: Vec::new(),
             bind_groups: HashMap::new(),
-            edge_buffer,
+            edge_texture,
+            edge_view,
             msaa,
             color_format,
             depth_format,
@@ -404,8 +426,16 @@ impl TerrainResources {
         if count == 0 {
             return;
         }
-        let bytes = bytemuck::cast_slice(&edges[..count]);
-        queue.write_buffer(&self.edge_buffer, 0, bytes);
+        queue.write_texture(
+            self.edge_texture.as_image_copy(),
+            bytemuck::cast_slice(&edges[..count]),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(EDGE_BYTES_PER_TILE),
+                rows_per_image: None,
+            },
+            edge_texture_size(count as u32),
+        );
     }
 
     /// Replaces this frame's terrain draws.
