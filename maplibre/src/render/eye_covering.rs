@@ -16,6 +16,48 @@ use crate::{
     tcs::world::World,
 };
 
+/// Identifier of a registered viewport slot in a multi-view frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ViewSlotId(u32);
+
+impl ViewSlotId {
+    /// Wraps a raw slot index (`0..64` maps to bit positions in `ViewSlotMask`).
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// Raw zero-based slot index.
+    pub const fn as_u32(self) -> u32 {
+        self.0
+    }
+}
+
+/// Which [`ViewSlotId`] is currently executing its render stages, or `None` on the default head.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CurrentViewSlot(pub Option<ViewSlotId>);
+
+/// Union of tiles and terrain drape coordinates retained across all active and skipped view slots.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SlotResidencyFloor {
+    pub(crate) drawn_count: usize,
+    pub(crate) retained_tiles: std::collections::HashSet<WorldTileCoords>,
+    pub(crate) retained_drapes: std::collections::HashSet<WorldTileCoords>,
+}
+
+/// Unioned tile requests computed across all active slots (plus skipped slots' in-flight sets)
+/// before the single `Extract` stage of a multi-view frame.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MultiViewExtractCovering {
+    pub(crate) active: bool,
+    pub(crate) vector_tiles: Vec<WorldTileCoords>,
+    pub(crate) max_view_level: u8,
+    pub(crate) raster_regions: RasterCoverings,
+    pub(crate) terrain_tiles: Vec<WorldTileCoords>,
+    pub(crate) skipped_wanted_vector: std::collections::HashSet<WorldTileCoords>,
+    pub(crate) skipped_wanted_raster: std::collections::HashSet<WorldTileCoords>,
+    pub(crate) skipped_wanted_dem: std::collections::HashSet<WorldTileCoords>,
+}
+
 /// Which eye of a frame the schedule is running for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EyeInFrame {
@@ -42,7 +84,7 @@ pub type RasterCoverings = Vec<(RasterSourceId, Vec<WorldTileCoords>)>;
 /// and draw of this frame selects against. Each covering keeps its own history: the terrain
 /// surface, the view and each raster source split the quadtree at different levels, so one
 /// covering's leaves say nothing about where another split.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct FrameLodHistory {
     pub(crate) view: LodHistory,
     pub(crate) raster: std::collections::HashMap<RasterSourceId, LodHistory>,
@@ -79,7 +121,7 @@ pub(crate) fn snapshot_lod_history(world: &mut World) {
 
 /// The drawn tiles a frame selected: the first eye's, which later eyes of the frame reuse, or
 /// the map camera's own.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SharedCovering {
     /// The stereo frame whose eyes share the selection; none for a map camera's frame.
     frame: Option<u64>,
@@ -88,6 +130,16 @@ pub struct SharedCovering {
 }
 
 impl SharedCovering {
+    /// Binds a cloned covering snapshot to `frame` for `CoveringPolicy::StereoReuse`.
+    #[cfg(feature = "headless")]
+    pub(crate) fn with_frame(&self, frame: u64) -> Self {
+        Self {
+            frame: Some(frame),
+            tiles: self.tiles.clone(),
+            raster: self.raster.clone(),
+        }
+    }
+
     /// The tiles the first eye selected, or `None` when it selected no region.
     pub(crate) fn tiles(&self) -> Option<&[WorldTileCoords]> {
         self.tiles.as_ref().map(|(tiles, _)| tiles.as_slice())

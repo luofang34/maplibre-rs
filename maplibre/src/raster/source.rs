@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Style source owning raster pixels. The fallback source is distinct from every named source.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RasterSourceId(Option<String>);
 
 impl RasterSourceId {

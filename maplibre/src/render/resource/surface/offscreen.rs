@@ -38,14 +38,15 @@ impl BufferDimensions {
     }
 }
 
-/// A persistent single-sample render target with optional CPU readback storage.
-/// Rendering does not populate the readback buffer; submit a texture-to-buffer copy first.
+/// A persistent single-sample render target with lazy optional CPU readback storage.
+/// Rendering does not allocate or populate the readback buffer until a capture requests it.
 pub struct BufferedTextureHead {
     pub(super) texture: wgpu::Texture,
+    pub(super) texture_view: wgpu::TextureView,
     pub(super) texture_format: wgpu::TextureFormat,
     pub(super) texture_format_features: TextureFormatFeatures,
     #[cfg(feature = "headless")]
-    output_buffer: wgpu::Buffer,
+    output_buffer: std::sync::OnceLock<wgpu::Buffer>,
     #[cfg(feature = "headless")]
     buffer_dimensions: BufferDimensions,
 }
@@ -59,13 +60,6 @@ impl BufferedTextureHead {
     ) -> Self {
         #[cfg(feature = "headless")]
         let dimensions = BufferDimensions::new(size);
-        #[cfg(feature = "headless")]
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("BufferedTextureHead buffer"),
-            size: (dimensions.padded_bytes_per_row * dimensions.height) as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Surface texture"),
             size: wgpu::Extent3d {
@@ -83,15 +77,27 @@ impl BufferedTextureHead {
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[format],
         });
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             texture,
+            texture_view,
             texture_format: format,
             texture_format_features: features,
             #[cfg(feature = "headless")]
-            output_buffer,
+            output_buffer: std::sync::OnceLock::new(),
             #[cfg(feature = "headless")]
             buffer_dimensions: dimensions,
         }
+    }
+
+    /// The single-sample color texture frames are rendered into.
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
+    }
+
+    /// Persistent view of [`Self::texture`] for zero-copy GPU composition or shader binding.
+    pub fn view(&self) -> &wgpu::TextureView {
+        &self.texture_view
     }
 }
 
@@ -119,7 +125,7 @@ impl BufferedTextureHead {
         &self,
         device: &wgpu::Device,
     ) -> Result<wgpu::BufferSlice<'_>, BufferReadbackError> {
-        let buffer_slice = self.output_buffer.slice(..);
+        let buffer_slice = self.ensure_buffer(device).slice(..);
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             sender.send(result).ok();
@@ -132,7 +138,9 @@ impl BufferedTextureHead {
     /// Releases CPU access so the buffer can receive another GPU copy.
     /// All [`wgpu::BufferView`] values must be dropped first, or wgpu panics.
     pub fn unmap(&self) {
-        self.output_buffer.unmap();
+        if let Some(buffer) = self.output_buffer.get() {
+            buffer.unmap();
+        }
     }
 
     /// Writes mapped RGBA8 pixels as a PNG, skipping GPU row-alignment padding.
@@ -166,19 +174,32 @@ impl BufferedTextureHead {
         Ok(())
     }
 
-    /// The texture frames are rendered into.
-    pub fn texture(&self) -> &wgpu::Texture {
-        &self.texture
-    }
-
     /// Copy source at mip level zero and the origin of this target's only layer.
     pub fn copy_texture(&self) -> wgpu::TexelCopyTextureInfo<'_> {
         self.texture.as_image_copy()
     }
 
-    /// Destination for texture readback, allocated with `COPY_DST | MAP_READ` usage.
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.output_buffer
+    /// Returns `true` when the `MAP_READ | COPY_DST` staging buffer has been lazily allocated.
+    pub fn has_readback_buffer(&self) -> bool {
+        self.output_buffer.get().is_some()
+    }
+
+    /// Borrows the readback buffer if already allocated, without creating one.
+    pub fn try_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.output_buffer.get()
+    }
+
+    /// Lazily allocates (on first call) and returns the `COPY_DST | MAP_READ` staging buffer.
+    pub fn ensure_buffer(&self, device: &wgpu::Device) -> &wgpu::Buffer {
+        self.output_buffer.get_or_init(|| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("BufferedTextureHead buffer"),
+                size: (self.buffer_dimensions.padded_bytes_per_row * self.buffer_dimensions.height)
+                    as u64,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        })
     }
 
     /// Padded byte stride to use in the texture-to-buffer copy layout.

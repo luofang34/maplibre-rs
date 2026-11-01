@@ -302,7 +302,7 @@ pub(super) fn add_to_graph(graph: &mut crate::render::graph::RenderGraph) {
     draw_graph.add_node(GLOBE_DAYLIGHT, GlobeDaylightNode);
     let edges = [
         draw_graph.add_node_edge(draw_graph::node::MAIN_PASS, GLOBE_DAYLIGHT),
-        draw_graph.add_node_edge(GLOBE_DAYLIGHT, draw_graph::node::TRANSLUCENT_PASS),
+        draw_graph.add_node_edge(GLOBE_DAYLIGHT, draw_graph::node::SCENE_3D_PASS),
     ];
     for edge in edges {
         if let Err(error) = edge {

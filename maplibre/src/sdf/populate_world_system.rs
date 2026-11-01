@@ -31,11 +31,22 @@ impl<E: Environment, T: VectorTransferables> System for PopulateWorldSystem<E, T
         "sdf_populate_world_system".into()
     }
 
-    fn run(&mut self, MapContext { world, style, .. }: &mut MapContext) -> SystemResult {
+    fn run(
+        &mut self,
+        MapContext {
+            world,
+            style,
+            renderer,
+            ..
+        }: &mut MapContext,
+    ) -> SystemResult {
         let messages = self.kernel.apc().receive(|message| {
             message.has_tag(T::SymbolLayerTessellated::message_tag())
                 || message.has_tag(super::provided::ProvidedImagesReport::message_tag())
         });
+        if renderer.settings.symbol_pools.is_empty() {
+            return Ok(());
+        }
         apply_worker_messages(messages, |message| {
             if message.has_tag(super::provided::ProvidedImagesReport::message_tag()) {
                 let report =

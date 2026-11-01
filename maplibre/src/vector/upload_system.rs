@@ -46,11 +46,11 @@ pub fn upload_system(
         world,
         style,
         view_state,
-        renderer: Renderer { queue, .. },
+        renderer: Renderer { queue, settings, .. },
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    if crate::render::eye_covering::EyeInFrame::reuses_content(world) {
+    if settings.buffer_pools.is_empty() || crate::render::eye_covering::EyeInFrame::reuses_content(world) {
         return Ok(());
     }
     let (paint_frame, previous_paint) = frame_paint(world, style, view_state);

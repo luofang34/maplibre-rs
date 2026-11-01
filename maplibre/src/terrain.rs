@@ -31,7 +31,7 @@ pub mod interaction;
 mod loaded_dem;
 pub mod mesh;
 pub(crate) mod populate_world_system;
-mod queue_system;
+pub(crate) mod queue_system;
 pub(crate) mod request_system;
 mod resource_system;
 pub mod resources;

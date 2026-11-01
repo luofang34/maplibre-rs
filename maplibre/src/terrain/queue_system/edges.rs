@@ -35,7 +35,7 @@ impl<'a> Dems<'a> {
                 .values()
                 .flatten()
                 .filter_map(|source| match tiles.query::<&DemTileComponent>(*source) {
-                    Some(DemTileComponent::Loaded(dem)) => Some((*source, &dem.tile)),
+                    Some(DemTileComponent::Loaded(dem)) => Some((*source, dem.tile.as_ref())),
                     _ => None,
                 })
                 .collect(),

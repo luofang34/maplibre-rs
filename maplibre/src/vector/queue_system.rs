@@ -28,9 +28,13 @@ pub fn queue_system(
         style,
         view_state,
         world,
+        renderer,
         ..
     }: &mut MapContext,
 ) -> SystemResult {
+    if renderer.settings.buffer_pools.is_empty() {
+        return Ok(());
+    }
     let Some((
         Initialized(tile_view_pattern),
         Initialized(buffer_pool),

@@ -5,6 +5,7 @@
 use crate::{
     environment::Environment,
     io::source_client::{HttpSourceClient, SourceClient},
+    sdf::assets::AssetCache,
 };
 
 /// Owns the window factory, executor, worker transport and source loader selected by [`Environment`].
@@ -61,6 +62,7 @@ pub struct KernelBuilder<E: Environment> {
     apc: Option<E::AsyncProcedureCall>,
     scheduler: Option<E::Scheduler>,
     http_client: Option<E::HttpClient>,
+    asset_cache: Option<AssetCache>,
 }
 
 impl<E: Environment> Default for KernelBuilder<E> {
@@ -77,7 +79,14 @@ impl<E: Environment> KernelBuilder<E> {
             apc: None,
             http_client: None,
             map_window_config: None,
+            asset_cache: None,
         }
+    }
+
+    /// Shares `asset_cache` with the map thread's [`SourceClient`].
+    pub fn with_asset_cache(mut self, asset_cache: AssetCache) -> Self {
+        self.asset_cache = Some(asset_cache);
+        self
     }
 
     /// Sets the window factory, replacing any configuration already supplied.
@@ -107,18 +116,25 @@ impl<E: Environment> KernelBuilder<E> {
     /// Consumes the services without creating a window or submitting work.
     /// Returns the first missing dependency in window, transport, scheduler, HTTP order.
     pub fn build(self) -> Result<Kernel<E>, KernelBuildError> {
+        let map_window_config = self
+            .map_window_config
+            .ok_or(KernelBuildError::MissingWindowConfig)?;
+        let apc = self
+            .apc
+            .ok_or(KernelBuildError::MissingAsyncProcedureCall)?;
+        let scheduler = self.scheduler.ok_or(KernelBuildError::MissingScheduler)?;
+        let http_client = self
+            .http_client
+            .ok_or(KernelBuildError::MissingHttpClient)?;
+        let mut source_client = SourceClient::new(HttpSourceClient::new(http_client));
+        if let Some(asset_cache) = self.asset_cache {
+            source_client = source_client.with_asset_cache(asset_cache);
+        }
         Ok(Kernel {
-            map_window_config: self
-                .map_window_config
-                .ok_or(KernelBuildError::MissingWindowConfig)?,
-            apc: self
-                .apc
-                .ok_or(KernelBuildError::MissingAsyncProcedureCall)?,
-            scheduler: self.scheduler.ok_or(KernelBuildError::MissingScheduler)?,
-            source_client: SourceClient::new(HttpSourceClient::new(
-                self.http_client
-                    .ok_or(KernelBuildError::MissingHttpClient)?,
-            )),
+            map_window_config,
+            apc,
+            scheduler,
+            source_client,
         })
     }
 }

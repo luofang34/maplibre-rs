@@ -5,15 +5,17 @@ use crate::{
     projection::renderer_data::tile_mercator_coordinates,
     raster::render_commands::DrawRasterTiles,
     render::{
+        eventually::{Eventually, Eventually::Initialized},
         render_commands::DrawMasks,
         render_phase::{Draw, DrawState, LayerItem, ProjectionBinding, TileMaskItem},
         shaders::ShaderTileMetadata,
-        tile_view_pattern::TileShape,
+        tile_view_pattern::{TileShape, WgpuTileViewPattern},
     },
     style::{source::TileAddressingScheme, Style},
-    tcs::tiles::Tile,
+    tcs::{system::SystemError, tiles::Tile, world::World},
     terrain::{
         drape_targets::TargetSpec,
+        resources::TerrainResources,
         rtt::{drape_transform, EDGE_OVERLAP},
         DrapePhase, DrapeTarget,
     },
@@ -176,6 +178,47 @@ pub(super) fn background_clear_color(style: &Style) -> wgpu::Color {
             a: f64::from(color.alpha),
         })
         .unwrap_or(wgpu::Color::TRANSPARENT)
+}
+
+pub(super) fn encode_drapes(
+    specs: &[TargetSpec],
+    redraw: &[bool],
+    clear_color: wgpu::Color,
+    world: &mut World,
+    zoom: Zoom,
+    queue: &crate::render::upload_queue::UploadQueue,
+) -> Result<DrapePhase, SystemError> {
+    let capacity = match world.resources.get::<Eventually<WgpuTileViewPattern>>() {
+        Some(Initialized(pattern)) => pattern.remaining_metadata_capacity(),
+        _ => return Err(SystemError::Dependencies),
+    };
+
+    let drape_size = match world.resources.get::<Eventually<TerrainResources>>() {
+        Some(Initialized(terrain)) => terrain.drape_size(),
+        _ => return Err(SystemError::Dependencies),
+    };
+    let (metadata, slots) = drape_metadata(specs, redraw, capacity, zoom, drape_size);
+    let ranges = {
+        let Some(Initialized(pattern)) =
+            world.resources.get_mut::<Eventually<WgpuTileViewPattern>>()
+        else {
+            return Err(SystemError::Dependencies);
+        };
+        pattern
+            .upload_extra_metadata(queue, &metadata)
+            .map_err(|error| {
+                tracing::error!(%error, "unable to upload drape metadata");
+                SystemError::Setup
+            })?
+    };
+    Ok(build_drape_phase(
+        specs,
+        redraw,
+        &slots,
+        &ranges,
+        zoom,
+        clear_color,
+    ))
 }
 
 #[cfg(test)]

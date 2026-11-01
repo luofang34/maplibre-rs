@@ -88,7 +88,9 @@ async fn resizing_allocates_new_storage_and_retains_existing_capture_handles() {
         (65, 3)
     );
     assert_eq!(current.bytes_per_row(), 512);
-    assert_eq!(current.buffer().size(), 512 * 3);
+    assert!(!current.has_readback_buffer());
+    assert_eq!(current.ensure_buffer(&renderer.device).size(), 512 * 3);
+    assert!(current.has_readback_buffer());
     assert_eq!(
         (original.texture().width(), original.texture().height()),
         (3, 2)

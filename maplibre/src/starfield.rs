@@ -59,6 +59,17 @@ impl<E: Environment> Plugin<E> for StarfieldPlugin {
         schedule.add_system_to_stage(RenderStageLabel::Queue, upload::queue_system);
         schedule.add_system_to_stage(RenderStageLabel::Queue, sun::queue_system);
         schedule.add_system_to_stage(RenderStageLabel::Queue, moon::queue_system);
+        if let Some(hooks) = world.resources.get_mut::<crate::render::PassDrawHooks>() {
+            hooks.register(crate::render::PassHookPoint::MainPassBegin, draw);
+            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, sun::draw);
+            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, moon::draw);
+        } else {
+            let mut hooks = crate::render::PassDrawHooks::new();
+            hooks.register(crate::render::PassHookPoint::MainPassBegin, draw);
+            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, sun::draw);
+            hooks.register(crate::render::PassHookPoint::TranslucentPassBegin, moon::draw);
+            world.resources.insert(hooks);
+        }
         add_sun_depth_copy(graph);
     }
 }
@@ -73,7 +84,7 @@ fn add_sun_depth_copy(graph: &mut crate::render::graph::RenderGraph) {
     };
     draw_graph.add_node(sun::depth::SUN_DEPTH_COPY, sun::depth::SunDepthCopyNode);
     let edges = [
-        draw_graph.add_node_edge(draw_graph::node::MAIN_PASS, sun::depth::SUN_DEPTH_COPY),
+        draw_graph.add_node_edge(draw_graph::node::SCENE_3D_PASS, sun::depth::SUN_DEPTH_COPY),
         draw_graph.add_node_edge(
             sun::depth::SUN_DEPTH_COPY,
             draw_graph::node::TRANSLUCENT_PASS,

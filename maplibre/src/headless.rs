@@ -58,11 +58,22 @@ pub enum HeadlessRendererError {
 }
 
 mod graph_node;
+mod shared_assets;
 mod system;
 
 pub mod environment;
 pub mod map;
 pub mod window;
+
+pub use map::{
+    CoveringPolicy, MultiViewError, MultiViewFrame, SlotView, TerrainPatchSnapshot, ViewSlotConfig,
+    ViewSlotEntry, ViewSlotId,
+};
+pub use shared_assets::SharedMapAssets;
+pub use crate::render::{
+    placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask},
+    settings::{ProceduralReliefStyle, TerrainDrapeMode},
+};
 
 /// Creates a renderer with default GPU settings and nonzero physical-pixel dimensions.
 /// Returns size, window, kernel or GPU initialization failures without drawing a frame.
@@ -110,12 +121,38 @@ pub fn create_headless_renderer_on_host_gpu(
 ) -> Result<(Kernel<HeadlessEnvironment>, Renderer), HeadlessRendererError> {
     let size = PhysicalSize::new(width, height)
         .ok_or(HeadlessRendererError::InvalidSize { width, height })?;
-    let kernel = environment::create_kernel(size, None, loader)?;
+    let kernel = environment::create_kernel(size, None, loader, None)?;
     let window: HeadlessMapWindow = kernel
         .map_window_config()
         .create()
         .map_err(|source| HeadlessRendererError::Window { source })?;
     let renderer = Renderer::on_host_gpu(&window, gpu, settings);
+    Ok((kernel, renderer))
+}
+
+/// Creates a headless renderer on `gpu` sharing immutable decoded tiles, glyphs, sprites, and
+/// compiled GPU pipelines via `shared` across independent [`HeadlessMap`](map::HeadlessMap) worlds.
+pub fn create_headless_renderer_on_host_gpu_with_shared_assets(
+    width: u32,
+    height: u32,
+    gpu: crate::render::host_gpu::HostGpu,
+    settings: RendererSettings,
+    shared: &SharedMapAssets,
+) -> Result<(Kernel<HeadlessEnvironment>, Renderer), HeadlessRendererError> {
+    let size = PhysicalSize::new(width, height)
+        .ok_or(HeadlessRendererError::InvalidSize { width, height })?;
+    let kernel = environment::create_kernel(
+        size,
+        None,
+        shared.loader().cloned(),
+        Some(shared.asset_cache().clone()),
+    )?;
+    let window: HeadlessMapWindow = kernel
+        .map_window_config()
+        .create()
+        .map_err(|source| HeadlessRendererError::Window { source })?;
+    let renderer = Renderer::on_host_gpu(&window, gpu, settings)
+        .with_shared_pipelines(shared.pipelines().clone());
     Ok((kernel, renderer))
 }
 
@@ -128,7 +165,7 @@ async fn create_renderer(
 ) -> Result<(Kernel<HeadlessEnvironment>, Renderer), HeadlessRendererError> {
     let size = PhysicalSize::new(width, height)
         .ok_or(HeadlessRendererError::InvalidSize { width, height })?;
-    let kernel = environment::create_kernel(size, cache_path, loader)?;
+    let kernel = environment::create_kernel(size, cache_path, loader, None)?;
 
     let mwc: &HeadlessMapWindowConfig = kernel.map_window_config();
     let window: HeadlessMapWindow = mwc

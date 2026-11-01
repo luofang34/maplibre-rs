@@ -53,6 +53,7 @@ impl MapContext {
     /// Sets the direction towards the sun in ECEF axes, which drives the atmosphere in place
     /// of the style's root `light` and darkens the terrain's night side; `None` returns the
     /// atmosphere to the style's light and lights all terrain as day.
+    #[cfg(feature = "experimental")]
     pub fn set_sun_direction(&mut self, sun: Option<crate::celestial::EcefDirection>) {
         if crate::celestial::sun_direction(&self.world) != sun {
             crate::celestial::set_sun_direction(&mut self.world, sun);
@@ -62,6 +63,7 @@ impl MapContext {
 
     /// Sets the solar elevations over which the ground turns from night to day while a sun
     /// direction is set.
+    #[cfg(feature = "experimental")]
     pub fn set_twilight_band(&mut self, twilight: crate::celestial::TwilightBand) {
         if crate::celestial::lighting(&self.world).twilight != twilight {
             crate::celestial::set_twilight_band(&mut self.world, twilight);
@@ -71,6 +73,7 @@ impl MapContext {
 
     /// Draws the globe's atmosphere in full, lit by the sun direction while one is set, even
     /// when the style has no `sky`; `false` leaves the atmosphere to the style's `sky`.
+    #[cfg(feature = "experimental")]
     pub fn set_atmosphere(&mut self, atmosphere: bool) {
         if crate::celestial::lighting(&self.world).atmosphere != atmosphere {
             crate::celestial::set_atmosphere(&mut self.world, atmosphere);
@@ -79,6 +82,7 @@ impl MapContext {
     }
 
     /// Replaces the stars drawn behind a globe; the starfield plugin draws them.
+    #[cfg(feature = "experimental")]
     pub fn set_stars(&mut self, stars: Vec<crate::celestial::Star>) {
         crate::celestial::set_stars(&mut self.world, stars);
         crate::render::frame_signals::mark_dirty(&mut self.world);
@@ -87,6 +91,7 @@ impl MapContext {
     /// Sets or clears the sun's angular radius. The disc stands where
     /// [`Self::set_sun_direction`] points, with a glare that follows how much of it shows; with no
     /// sun direction it is not drawn. The starfield plugin draws it.
+    #[cfg(feature = "experimental")]
     pub fn set_sun_angular_radius(&mut self, radius: Option<crate::celestial::AngularRadius>) {
         if crate::celestial::discs(&self.world).sun_radius != radius {
             crate::celestial::set_sun_angular_radius(&mut self.world, radius);
@@ -98,6 +103,7 @@ impl MapContext {
     /// moon is near enough that the Earth's centre sees it elsewhere. Its phase follows
     /// [`Self::set_sun_direction`]; with no sun set, the whole disc is drawn lit, a fallback
     /// rather than a phase. The starfield plugin draws it.
+    #[cfg(feature = "experimental")]
     pub fn set_moon_disc(&mut self, moon: Option<crate::celestial::Disc>) {
         if crate::celestial::discs(&self.world).moon != moon {
             crate::celestial::set_moon_disc(&mut self.world, moon);
@@ -114,6 +120,7 @@ impl MapContext {
     /// moon's shadow is not drawn as a spot on the globe. Set it for a view from the ground,
     /// and leave it at 1 for a view of the globe, whose day side would otherwise darken
     /// everywhere rather than along the eclipse's path.
+    #[cfg(feature = "experimental")]
     pub fn set_sun_visible_fraction(&mut self, fraction: crate::celestial::VisibleFraction) {
         if crate::celestial::lighting(&self.world).sun_visible != fraction {
             crate::celestial::set_sun_visible_fraction(&mut self.world, fraction);
@@ -124,6 +131,7 @@ impl MapContext {
     /// Sets or clears the Earth's shadow the moon is lit through during a lunar eclipse, as
     /// the host computes it: the moon dims and turns copper in the umbra, as dark as the
     /// shadow's Danjon value, and its light on the night side dims with it.
+    #[cfg(feature = "experimental")]
     pub fn set_earth_shadow(&mut self, shadow: Option<crate::celestial::EarthShadow>) {
         if crate::celestial::discs(&self.world).earth_shadow != shadow {
             crate::celestial::set_earth_shadow(&mut self.world, shadow);
@@ -132,6 +140,7 @@ impl MapContext {
     }
 
     /// The sun direction set with [`Self::set_sun_direction`].
+    #[cfg(feature = "experimental")]
     pub fn sun_direction(&self) -> Option<crate::celestial::EcefDirection> {
         crate::celestial::sun_direction(&self.world)
     }

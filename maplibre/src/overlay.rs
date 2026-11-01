@@ -38,7 +38,10 @@ mod tests;
 use std::rc::Rc;
 
 pub use pass::OVERLAY_PASS;
+#[cfg(feature = "headless")]
+pub(crate) use pipeline::OverlayGpu;
 pub use pipeline::DEPTH_BIAS;
+#[cfg(feature = "headless")]
 pub(crate) use probes::ProbeGpu;
 pub use probes::{DEPTH_PROBE_PASS, MAX_PROBES};
 
@@ -178,6 +181,31 @@ impl<E: Environment> Plugin<E> for OverlayPlugin {
             .insert(Eventually::<probes::ProbeGpu>::Uninitialized);
         schedule.add_system_to_stage(RenderStageLabel::Prepare, pipeline::prepare_system);
         schedule.add_system_to_stage(RenderStageLabel::Prepare, probes::prepare_system);
+        if let Some(callbacks) =
+            world.resources.get_mut::<crate::render::AfterSubmitCallbacks>()
+        {
+            callbacks.register(|world: &World| {
+                if let Some(crate::render::eventually::Eventually::Initialized(probes)) =
+                    world
+                        .resources
+                        .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
+                {
+                    probes.after_submit();
+                }
+            });
+        } else {
+            let mut callbacks = crate::render::AfterSubmitCallbacks::new();
+            callbacks.register(|world: &World| {
+                if let Some(crate::render::eventually::Eventually::Initialized(probes)) =
+                    world
+                        .resources
+                        .get::<crate::render::eventually::Eventually<probes::ProbeGpu>>()
+                {
+                    probes.after_submit();
+                }
+            });
+            world.resources.insert(callbacks);
+        }
 
         let Some(draw_graph) = graph.get_sub_graph_mut(draw_graph::NAME) else {
             tracing::error!("draw graph is missing; the host overlay will not be drawn");
@@ -186,7 +214,7 @@ impl<E: Environment> Plugin<E> for OverlayPlugin {
         draw_graph.add_node(OVERLAY_PASS, pass::OverlayPassNode);
         draw_graph.add_node(DEPTH_PROBE_PASS, probes::DepthProbePassNode);
         let edges = [
-            draw_graph.add_node_edge(draw_graph::node::MAIN_PASS, OVERLAY_PASS),
+            draw_graph.add_node_edge(draw_graph::node::SCENE_3D_PASS, OVERLAY_PASS),
             draw_graph.add_node_edge(OVERLAY_PASS, DEPTH_PROBE_PASS),
             draw_graph.add_node_edge(DEPTH_PROBE_PASS, draw_graph::node::TRANSLUCENT_PASS),
         ];

@@ -37,7 +37,8 @@ impl LodContext {
             // tile counted as seen at grazing incidence, levels coarser than the eye sees.
             let position = camera.camera_position();
             let beneath = unit_sphere_to_lat_lon(position);
-            let height_radii = (position.magnitude() - 1.0).max(0.0);
+            let min_clearance = 1.0 / camera.body().radius_meters;
+            let height_radii = (position.magnitude() - 1.0).max(min_clearance);
             return Self::from_positions(
                 mercator_point(beneath),
                 mercator_center(camera),
@@ -69,15 +70,30 @@ impl LodContext {
         viewport_height: f64,
         level_offset: f64,
     ) -> Self {
-        let position = camera.camera_position();
-        let beneath = unit_sphere_to_lat_lon(position);
-        let height_radii = (position.magnitude() - 1.0).max(0.0);
         let focal =
             0.5 * viewport_height / (0.5 * camera.field_of_view_degrees()).to_radians().tan();
+        Self::screen_resolution_focal(camera, focal, level_offset, 0.0)
+    }
+
+    /// Screen-pixel texel resolution using an explicit focal length in pixels (such as an
+    /// [`ExternalView`](crate::render::view_state::ExternalView)'s `lod_focal_pixels`) and local
+    /// ground elevation beneath the eye.
+    pub(crate) fn screen_resolution_focal(
+        camera: &GlobeCameraState,
+        focal_pixels: f64,
+        level_offset: f64,
+        ground_elevation_meters: f64,
+    ) -> Self {
+        let position = camera.camera_position();
+        let beneath = unit_sphere_to_lat_lon(position);
+        let body = camera.body();
+        let ground_radius = body.unit_radius_at(ground_elevation_meters);
+        let min_clearance = 1.0 / body.radius_meters;
+        let height_radii = (position.magnitude() - ground_radius).max(min_clearance);
         Self::from_eye(
             mercator_point(beneath),
             height_radii * radius_world_units(beneath.latitude),
-            focal * 2_f64.powf(level_offset),
+            focal_pixels * 2_f64.powf(level_offset),
         )
     }
 

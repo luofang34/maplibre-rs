@@ -118,15 +118,25 @@ impl<E: Environment, T: DemTransferables> System for RequestSystem<E, T> {
         let Some(dem) = dem_source(style) else {
             return Ok(());
         };
-        let Some(view_region) = crate::render::projection::terrain_region(
-            style,
-            view_state,
-            world,
-            dem.tile_size,
-            ViewStatePadding::Tight,
-        )?
-        else {
-            return Ok(());
+        let multi = world
+            .resources
+            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
+            .filter(|m| m.active)
+            .cloned();
+        let terrain_tiles = if let Some(multi) = &multi {
+            multi.terrain_tiles.clone()
+        } else {
+            let Some(view_region) = crate::render::projection::terrain_region(
+                style,
+                view_state,
+                world,
+                dem.tile_size,
+                ViewStatePadding::Tight,
+            )?
+            else {
+                return Ok(());
+            };
+            view_region.iter().collect()
         };
 
         let mut requested = HashSet::new();
@@ -142,7 +152,7 @@ impl<E: Environment, T: DemTransferables> System for RequestSystem<E, T> {
             .map(|requests| requests.0.clone())
             .unwrap_or_default();
         let mut wanted = request_order(
-            view_region.iter().chain(drapes),
+            terrain_tiles.into_iter().chain(drapes),
             &world.tiles,
             dem.minzoom,
             dem.maxzoom,
@@ -168,6 +178,9 @@ impl<E: Environment, T: DemTransferables> System for RequestSystem<E, T> {
             }
             budget -= 1;
             self.request(coords, style, world)?;
+        }
+        if let Some(multi) = &multi {
+            requested.extend(multi.skipped_wanted_dem.iter().copied());
         }
         tile_retry::want(world, RequestKind::Dem, &requested);
 
@@ -221,38 +234,48 @@ pub fn fetch_dem_apc<K: OffscreenKernel, T: DemTransferables, C: Context + Clone
     kernel: K,
 ) -> AsyncProcedureFuture {
     Box::pin(async move {
+        use crate::{projection::body::Body, sdf::assets::tiles::CachedTileFailure};
         let (coords, style, attempt) = input.into_tile_request();
         let context = AttemptContext::new(context, attempt);
         let Some(dem) = dem_source(&style) else {
             return Ok(());
         };
+        let client = kernel.source_client();
+        let circumference = Body::EARTH.circumference_meters();
         let mut retry = false;
-        let image = match kernel.source_client().fetch(&coords, &dem.source).await {
-            Ok(data) => match image::load_from_memory(&data) {
-                Ok(image) => Some(image.to_rgba8()),
-                Err(error) => {
-                    tracing::warn!(%coords, source = %dem.name, %error, "DEM tile is not an image");
-                    None
-                }
-            },
-            Err(error) if error.is_not_found() => {
+        let loaded = match client
+            .assets()
+            .load_dem_tile(&client, &dem.source, &coords, dem.unpack, circumference)
+            .await
+        {
+            Ok(entry) => Some(entry),
+            Err(CachedTileFailure::NotFound) => {
                 tracing::debug!(%coords, source = %dem.name, "no DEM tile at the source; flat");
                 None
             }
-            Err(error) => {
-                retry = error.is_retryable();
+            Err(CachedTileFailure::Decode(error)) => {
+                tracing::warn!(%coords, source = %dem.name, %error, "DEM tile is not an image");
+                None
+            }
+            Err(CachedTileFailure::Transport { retryable, message }) => {
+                retry = retryable;
                 tracing::error!(
                     %coords,
                     source = %dem.name,
-                    error = %error.describe(),
+                    error = %message,
                     "DEM tile fetch failed"
                 );
                 None
             }
         };
-        match image {
-            Some(image) => context
-                .send_back(T::LayerDem::build_from(coords, image))
+        match loaded {
+            Some(entry) => context
+                .send_back(T::LayerDem::build_from_cached_dem(
+                    coords,
+                    std::sync::Arc::clone(&entry.tile),
+                    entry.circumference_meters,
+                    std::sync::Arc::clone(&entry.image),
+                ))
                 .map_err(ProcedureError::Send),
             None => context
                 .send_back(T::LayerDemMissing::build_from(coords))

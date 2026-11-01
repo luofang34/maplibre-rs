@@ -37,10 +37,22 @@ pub struct CollisionSystem {
     obstacles: u64,
 }
 
+/// World-level counter recording how many times [`CollisionSystem`] has executed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CollisionStats {
+    /// Total non-short-circuited [`CollisionSystem`] ticks on this world.
+    pub runs: u32,
+}
+
 impl CollisionSystem {
     /// Starts with no placement history or uploaded metadata fingerprints.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Number of times placement checks have executed on this system instance.
+    pub fn runs(&self) -> u32 {
+        self.runs
     }
 }
 
@@ -72,10 +84,14 @@ impl System for CollisionSystem {
             ..
         }: &mut MapContext,
     ) -> SystemResult {
-        if crate::render::eye_covering::EyeInFrame::reuses_content(world) {
+        if renderer.settings.symbol_pools.is_empty()
+            || crate::render::eye_covering::EyeInFrame::reuses_content(world)
+        {
             return Ok(());
         }
         self.runs = self.runs.wrapping_add(1);
+        let stats = world.resources.get_or_init_mut::<CollisionStats>();
+        stats.runs = stats.runs.wrapping_add(1);
         let seen: HashSet<_> = world
             .resources
             .get::<super::covering::SymbolCovering>()

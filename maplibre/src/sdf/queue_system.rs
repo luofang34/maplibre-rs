@@ -23,6 +23,9 @@ pub fn queue_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
+    if renderer.settings.symbol_pools.is_empty() {
+        return Ok(());
+    }
     super::covering::update(world, style, view_state, &renderer.device, &renderer.queue);
     let Some((covering, phase, Initialized(pool))) = world.resources.query_mut::<(
         &SymbolCovering,

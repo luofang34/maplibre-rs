@@ -1,6 +1,17 @@
 //! Elevation queries share the boundary surface used by the GPU.
 use super::*;
 use crate::terrain::{dem::DemTile, queue_system::edges::EdgeHeights};
+#[cfg(feature = "headless")]
+pub(crate) struct StitchedPatchGrid {
+    pub(crate) dem_coords: WorldTileCoords,
+    pub(crate) dem_tile: Arc<DemTile>,
+    pub(crate) heights_meters: Arc<[f32]>,
+    pub(crate) min_meters: f32,
+    pub(crate) max_meters: f32,
+    pub(crate) exaggeration: f32,
+    pub(crate) stitched_to_neighbors: bool,
+}
+
 impl TerrainCoverageIndex {
     pub(crate) fn set_surface_edges(
         &mut self,
@@ -58,9 +69,92 @@ impl TerrainCoverageIndex {
             a * (1.0 - fy) + c * (fy - fx) + d * fx
         })
     }
+
+    /// Evaluates the `(TERRAIN_MESH_SIZE + 1) × (TERRAIN_MESH_SIZE + 1)` (`129 × 129`) vertex
+    /// height grid in metres for `tile`, applying GPU-identical boundary crack stitching when
+    /// `tile` has cached neighbor [`EdgeHeights`].
+    #[cfg(feature = "headless")]
+    pub(crate) fn stitched_patch_grid(
+        &self,
+        tiles: &Tiles,
+        tile: WorldTileCoords,
+        fallback_dem: Option<(u8, u8, f32)>,
+    ) -> Option<StitchedPatchGrid> {
+        let (minzoom, maxzoom, exaggeration) = if self.exaggeration > 0.0 {
+            (self.minzoom, self.maxzoom, self.exaggeration)
+        } else {
+            let (minz, maxz, exag) = fallback_dem?;
+            (minz, maxz, f64::from(exag))
+        };
+        let source = self
+            .rendered
+            .get(&tile)
+            .copied()
+            .flatten()
+            .or_else(|| self.loaded_dem_for(tile))
+            .or_else(|| {
+                let mut cur = dem_tile_coords(tile, minzoom, maxzoom)?;
+                loop {
+                    if matches!(
+                        tiles.query::<&DemTileComponent>(cur),
+                        Some(DemTileComponent::Loaded(_))
+                    ) {
+                        return Some(cur);
+                    }
+                    cur = cur.get_parent()?;
+                }
+            })?;
+        let Some(DemTileComponent::Loaded(loaded)) = tiles.query::<&DemTileComponent>(source)
+        else {
+            return None;
+        };
+        let dem = Arc::clone(&loaded.tile);
+        let scale = 2_f64.powi(i32::from(u8::from(tile.z)));
+        let dem_scale = 2_f64.powi(i32::from(u8::from(source.z)));
+        let raw = |p: [f64; 2]| {
+            dem.elevation_at_tile_coords(
+                ((f64::from(tile.x) + p[0] / EXTENT) / scale * dem_scale - f64::from(source.x))
+                    * EXTENT,
+                ((f64::from(tile.y) + p[1] / EXTENT) / scale * dem_scale - f64::from(source.y))
+                    * EXTENT,
+            )
+        };
+        let side = crate::terrain::mesh::TERRAIN_MESH_SIZE as usize + 1;
+        let step = EXTENT / f64::from(crate::terrain::mesh::TERRAIN_MESH_SIZE);
+        let edges = self.edges.get(&tile);
+        let mut heights = Vec::with_capacity(side * side);
+        let mut min_m = f32::INFINITY;
+        let mut max_m = f32::NEG_INFINITY;
+        for row in 0..side {
+            let y = row as f64 * step;
+            let border_y = row < 2 || row + 2 >= side;
+            for col in 0..side {
+                let x = col as f64 * step;
+                let unscaled = match edges {
+                    Some(edge_heights) if border_y || col < 2 || col + 2 >= side => {
+                        edge_heights.height([x, y], &raw)
+                    }
+                    _ => raw([x, y]),
+                };
+                let value = (unscaled * exaggeration) as f32;
+                min_m = min_m.min(value);
+                max_m = max_m.max(value);
+                heights.push(value);
+            }
+        }
+        Some(StitchedPatchGrid {
+            dem_coords: source,
+            dem_tile: dem,
+            heights_meters: Arc::from(heights),
+            min_meters: min_m,
+            max_meters: max_m,
+            exaggeration: exaggeration as f32,
+            stitched_to_neighbors: edges.is_some(),
+        })
+    }
 }
 impl EdgeHeights {
-    fn height(&self, p: [f64; 2], raw: &impl Fn([f64; 2]) -> f64) -> f64 {
+    pub(crate) fn height(&self, p: [f64; 2], raw: &impl Fn([f64; 2]) -> f64) -> f64 {
         let edge = |t: f64, side: usize| {
             let i = (t / 32.0).round().clamp(0.0, 128.0) as usize;
             f64::from(if i == 128 {

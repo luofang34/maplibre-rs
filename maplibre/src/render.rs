@@ -50,7 +50,7 @@ use crate::{
 pub(crate) mod depth_copy;
 pub mod graph;
 pub mod resource;
-mod systems;
+pub(crate) mod systems;
 
 mod graph_runner;
 mod main_pass;
@@ -73,9 +73,13 @@ pub mod frame_trace;
 pub mod gpu_timer;
 #[cfg(feature = "headless")]
 pub mod host_gpu;
+pub mod placement_3d;
 pub mod projection;
 pub mod render_commands;
 pub mod render_phase;
+pub mod after_submit;
+pub mod pass_hooks;
+pub mod scene_lighting;
 pub mod settings;
 pub mod tile_mesh;
 pub mod tile_view_pattern;
@@ -84,6 +88,9 @@ pub mod upload_queue;
 pub mod view_state;
 pub mod xr;
 
+pub use after_submit::*;
+pub use pass_hooks::*;
+pub use scene_lighting::*;
 pub use shaders::ShaderVertex;
 
 use crate::{
@@ -146,6 +153,9 @@ pub struct RenderResources {
     /// A host's `Depth32Float` texture the frame's depth is copied into after everything is
     /// drawn, for a compositor that reprojects the frame.
     pub eye_depth_target: Option<wgpu::TextureView>,
+    /// Persistent single-sample `Depth32Float` texture populated via `DEPTH_COPY` when
+    /// [`RendererSettings::depth_readout`] is enabled on an offscreen target.
+    pub depth_readout_texture: Eventually<Texture>,
 }
 
 #[deny(missing_docs)]
@@ -157,6 +167,7 @@ impl RenderResources {
             depth_texture: Default::default(),
             multisampling_texture: Default::default(),
             eye_depth_target: None,
+            depth_readout_texture: Default::default(),
             surface,
         }
     }
@@ -204,6 +215,8 @@ pub struct Renderer {
     pub resources: RenderResources,
     /// Pass dependencies and subgraphs executed by the render stage.
     pub render_graph: RenderGraph,
+    /// Optional cross-instance shader and render-pipeline cache on this device.
+    pub shared_pipelines: Option<resource::SharedPipelines>,
 }
 
 #[deny(missing_docs)]
@@ -259,7 +272,15 @@ impl Renderer {
             settings,
             resources: RenderResources::new(surface),
             render_graph: Default::default(),
+            shared_pipelines: None,
         })
+    }
+
+    /// Attaches a cross-instance [`resource::SharedPipelines`] cache so pipelines compiled during
+    /// this renderer's schedule runs are shared across maps on the same device.
+    pub fn with_shared_pipelines(mut self, pipelines: resource::SharedPipelines) -> Self {
+        self.shared_pipelines = Some(pipelines);
+        self
     }
 
     /// Requests an adapter/device and allocates an offscreen target at the supplied window size.
@@ -305,6 +326,7 @@ impl Renderer {
             settings,
             resources: RenderResources::new(surface),
             render_graph: Default::default(),
+            shared_pipelines: None,
         })
     }
 
@@ -396,5 +418,6 @@ impl Renderer {
 mod render_plugin;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;
+pub use placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask};
 pub use render_plugin::{draw_graph, main_graph, MaskPipeline, RenderPlugin};
 pub(crate) mod tile_memory;

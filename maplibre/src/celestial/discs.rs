@@ -88,9 +88,11 @@ pub fn set_sun_angular_radius(world: &mut World, radius: Option<AngularRadius>) 
         .resources
         .get_or_init_mut::<CelestialDiscs>()
         .sun_radius = radius;
+    super::sync_scene_lighting(world);
 }
 
 /// Sets or clears the moon's disc, whose direction is the one seen from the camera's eye.
 pub fn set_moon_disc(world: &mut World, moon: Option<Disc>) {
     world.resources.get_or_init_mut::<CelestialDiscs>().moon = moon;
+    super::sync_scene_lighting(world);
 }

@@ -10,7 +10,10 @@ use std::{
     any::Any,
     collections::HashMap,
     future::{poll_fn, Future},
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{
+        atomic::AtomicUsize,
+        Arc, Mutex, MutexGuard, PoisonError,
+    },
     task::{Poll, Waker},
 };
 
@@ -70,6 +73,8 @@ struct Shared {
     state: Mutex<State>,
     budget_bytes: usize,
     negative_ttl: Duration,
+    dem_decodes: AtomicUsize,
+    raster_decodes: AtomicUsize,
 }
 
 impl std::fmt::Debug for Shared {
@@ -144,6 +149,8 @@ impl AssetCache {
             state: Mutex::new(State::default()),
             budget_bytes,
             negative_ttl,
+            dem_decodes: AtomicUsize::new(0),
+            raster_decodes: AtomicUsize::new(0),
         }))
     }
 
@@ -459,6 +466,8 @@ fn decode_glyphs(bytes: &[u8], source: &str) -> Result<(Glyphs, usize), AssetFai
         .sum();
     Ok((glyphs, bytes))
 }
+
+pub(crate) mod tiles;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;

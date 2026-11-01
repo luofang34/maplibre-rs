@@ -17,6 +17,7 @@ impl HeadlessMap {
     }
 }
 
+#[cfg(feature = "experimental")]
 mod sky;
 #[cfg(test)]
 mod tests;

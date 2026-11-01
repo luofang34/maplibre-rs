@@ -248,6 +248,14 @@ impl<Q: Queue<B>, B, V: Pod, I: Pod, TM: Pod, FM: Pod> BufferPool<Q, B, V, I, TM
         self.revision
     }
 
+    /// Returns `true` when all backing sub-allocation capacities are zero.
+    pub fn is_empty(&self) -> bool {
+        self.vertices.inner_size == 0
+            && self.indices.inner_size == 0
+            && self.layer_metadata.inner_size == 0
+            && self.feature_metadata.inner_size == 0
+    }
+
     pub fn get_loaded_style_layers_at(&self, coords: WorldTileCoords) -> Option<HashSet<&str>> {
         self.index.get_layers(coords).map(|layers| {
             layers

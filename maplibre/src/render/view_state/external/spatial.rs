@@ -24,6 +24,10 @@ impl ViewState {
         height / position.magnitude().max(1e-6)
     }
 
+    pub(crate) fn external_lod_focal_pixels(&self) -> Option<f64> {
+        self.external_eye.map(|eye| eye.lod_focal_pixels)
+    }
+
     pub(crate) fn eye_lod_context(&self, requested_zoom: f64) -> Option<LodContext> {
         let eye = self.external_eye?;
         let position = self.eye_position();

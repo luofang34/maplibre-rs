@@ -31,6 +31,7 @@ fn stages() -> Vec<Stage> {
         ),
         ("sky", Box::new(SkyShader { format })),
         ("atmosphere", Box::new(AtmosphereShader { format })),
+        #[cfg(feature = "experimental")]
         (
             "globe daylight",
             Box::new(crate::background::daylight::GlobeDaylightShader { format }),

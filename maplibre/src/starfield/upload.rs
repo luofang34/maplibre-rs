@@ -97,7 +97,11 @@ fn view_and_sky(
         return (rotation, disabled);
     }
     let light = style.light.clone().unwrap_or_default();
-    let lighting = crate::celestial::lighting(world);
+    let lighting = world
+        .resources
+        .get::<crate::render::SceneLighting>()
+        .copied()
+        .unwrap_or_default();
     let sky = AtmosphereLayerMetadata::from_view(
         &camera,
         &light,

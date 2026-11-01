@@ -321,6 +321,9 @@ impl Schedule {
         context: &mut MapContext,
         include: impl Fn(&dyn StageLabel) -> bool,
     ) -> StageResult {
+        let _pipeline_scope = crate::render::resource::SharedPipelines::enter(
+            context.renderer.shared_pipelines.clone(),
+        );
         for label in &self.stage_order {
             if !include(&**label) {
                 continue;

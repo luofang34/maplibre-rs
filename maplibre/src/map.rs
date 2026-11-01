@@ -100,6 +100,7 @@ pub struct Map<E: Environment> {
 
     plugins: Vec<Box<dyn Plugin<E>>>,
     max_pitch: cgmath::Deg<f64>,
+    #[cfg(feature = "experimental")]
     sun: Option<crate::celestial::EcefDirection>,
 }
 
@@ -120,9 +121,7 @@ where
         let schedule = Schedule::default();
 
         let window = kernel.map_window_config().create()?;
-
         let kernel = Rc::new(kernel);
-
         let map = Self {
             kernel,
             schedule,
@@ -136,6 +135,7 @@ where
             window,
             plugins,
             max_pitch: DEFAULT_MAX_PITCH,
+            #[cfg(feature = "experimental")]
             sun: None,
         };
         Ok(map)
@@ -148,8 +148,8 @@ where
         self.max_pitch = max_pitch;
     }
 
-    /// Sets the direction towards the sun, as [`MapContext::set_sun_direction`], before or
-    /// after the renderer is initialized; it outlasts [`Self::reset`].
+    /// Sets the direction towards the sun, as [`MapContext::set_sun_direction`].
+    #[cfg(feature = "experimental")]
     pub fn set_sun_direction(&mut self, sun: Option<crate::celestial::EcefDirection>) {
         self.sun = sun;
         if let CurrentMapContext::Ready(context) = &mut self.map_context {
@@ -207,6 +207,7 @@ where
                 let mut world = World::default();
                 world.resources.insert(self.request_attempts.clone());
                 crate::sdf::provided::set_pixel_ratio(&mut world, self.window.scale_factor());
+                #[cfg(feature = "experimental")]
                 crate::celestial::set_sun_direction(&mut world, self.sun);
 
                 for plugin in &self.plugins {

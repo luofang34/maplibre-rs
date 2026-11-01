@@ -42,4 +42,5 @@ pub fn set_sun_visible_fraction(world: &mut World, fraction: VisibleFraction) {
         .resources
         .get_or_init_mut::<CelestialLighting>()
         .sun_visible = fraction;
+    super::sync_scene_lighting(world);
 }

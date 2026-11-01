@@ -23,10 +23,14 @@ pub mod draw_graph {
     pub const NAME: &str = "draw";
     /// Input-label namespace; the draw subgraph declares no external input slots.
     pub mod input {}
-    /// Nodes ordered from opaque drawing through translucency to depth export.
+    /// Nodes ordered from opaque drawing through 3D scene entities and translucency to depth export.
     pub mod node {
         /// Draws tile masks and map-layer items into the frame attachments.
         pub const MAIN_PASS: &str = "main_pass";
+        /// Canonical 3D scene pass slot for dynamic 3D entities (e.g. glTF aircraft and ground
+        /// vehicles), ordered after `MAIN_PASS` (and `GLOBE_DAYLIGHT`) and before `OVERLAY_PASS`,
+        /// `DEPTH_PROBE_PASS`, `SUN_DEPTH_COPY`, `TRANSLUCENT_PASS`, and `DEPTH_COPY`.
+        pub const SCENE_3D_PASS: &str = "scene_3d_pass";
         /// Draws translucent items using the attachments populated by the main pass.
         pub const TRANSLUCENT_PASS: &str = "translucent_pass";
         /// Copies rendered depth to the optional host depth target.
@@ -62,6 +66,7 @@ impl<E: Environment> Plugin<E> for RenderPlugin {
         let mut draw_graph = RenderGraph::default();
         // Draw nodes
         draw_graph.add_node(draw_graph::node::MAIN_PASS, MainPassNode::new());
+        draw_graph.add_node(draw_graph::node::SCENE_3D_PASS, EmptyNode);
         // Draw nodes
         draw_graph.add_node(
             draw_graph::node::TRANSLUCENT_PASS,
@@ -76,9 +81,15 @@ impl<E: Environment> Plugin<E> for RenderPlugin {
         draw_graph
             .add_node_edge(
                 draw_graph::node::MAIN_PASS,
+                draw_graph::node::SCENE_3D_PASS,
+            )
+            .expect("main pass or scene 3d pass node does not exist");
+        draw_graph
+            .add_node_edge(
+                draw_graph::node::SCENE_3D_PASS,
                 draw_graph::node::TRANSLUCENT_PASS,
             )
-            .expect("main pass or draw node does not exist");
+            .expect("scene 3d pass or translucent pass node does not exist");
         draw_graph.add_node(draw_graph::node::DEPTH_COPY, DepthCopyNode);
         draw_graph
             .add_node_edge(

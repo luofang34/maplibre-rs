@@ -5,6 +5,8 @@
 pub use buffer::*;
 pub use mipmap::*;
 pub use pipeline::*;
+pub(crate) use pipeline_cache::create_bind_group_layout_cached;
+pub use pipeline_cache::SharedPipelines;
 pub use shader::*;
 pub(crate) use shared::share_gpu;
 pub use surface::*;
@@ -14,6 +16,7 @@ pub use tile_pipeline::*;
 mod buffer;
 mod mipmap;
 mod pipeline;
+mod pipeline_cache;
 mod shader;
 mod shared;
 mod surface;

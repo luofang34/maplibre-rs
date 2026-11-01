@@ -20,6 +20,7 @@ use crate::{
 pub struct DepthCopyPipeline {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
+    samples: u32,
 }
 
 impl DepthCopyPipeline {
@@ -89,7 +90,11 @@ impl DepthCopyPipeline {
             multiview_mask: None,
             cache: None,
         });
-        Self { pipeline, layout }
+        Self {
+            pipeline,
+            layout,
+            samples,
+        }
     }
     /// Resolves the rendered depth into a single-sample target.
     pub(crate) fn copy(
@@ -133,6 +138,14 @@ impl DepthCopyPipeline {
     }
 }
 
+impl crate::render::eventually::HasChanged for DepthCopyPipeline {
+    type Criteria = u32;
+
+    fn has_changed(&self, criteria: &Self::Criteria) -> bool {
+        self.samples != *criteria
+    }
+}
+
 /// Copies the frame's depth into the host's depth texture, when the frame has one.
 pub struct DepthCopyNode;
 
@@ -144,7 +157,14 @@ impl Node for DepthCopyNode {
         state: &RenderResources,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let Some(target) = &state.eye_depth_target else {
+        let target: Option<&wgpu::TextureView> = state
+            .eye_depth_target
+            .as_ref()
+            .or_else(|| match &state.depth_readout_texture {
+                Initialized(texture) => Some(&texture.view),
+                Eventually::Uninitialized => None,
+            });
+        let Some(target) = target else {
             return Ok(());
         };
         let Initialized(depth_texture) = &state.depth_texture else {

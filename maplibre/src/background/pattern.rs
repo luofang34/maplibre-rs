@@ -43,14 +43,16 @@ fn view_layout_entries() -> Vec<wgpu::BindGroupLayoutEntry> {
 /// The bind group layouts of the pattern pipeline: the image, then the view.
 pub(crate) fn layouts(device: &wgpu::Device) -> [wgpu::BindGroupLayout; 2] {
     [
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("background pattern image"),
-            entries: &crate::vector::pattern::layout_entries(),
-        }),
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("background pattern view"),
-            entries: &view_layout_entries(),
-        }),
+        crate::render::resource::create_bind_group_layout_cached(
+            device,
+            Some("background pattern image"),
+            &crate::vector::pattern::layout_entries(),
+        ),
+        crate::render::resource::create_bind_group_layout_cached(
+            device,
+            Some("background pattern view"),
+            &view_layout_entries(),
+        ),
     ]
 }
 
@@ -184,8 +186,9 @@ impl BackgroundPatternGpu {
 
 /// The bind group layout of the world-size uniform the globe pattern reads.
 pub(crate) fn world_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("globe background pattern world"),
-        entries: &view_layout_entries(),
-    })
+    crate::render::resource::create_bind_group_layout_cached(
+        device,
+        Some("globe background pattern world"),
+        &view_layout_entries(),
+    )
 }

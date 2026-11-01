@@ -1,8 +1,8 @@
 //! Texture budgets do not change the mesh or DEM resolution under a surface.
 use crate::{coords::WorldTileCoords, tcs::world::World, terrain::drape_targets::TargetSpec};
 
-#[derive(Default)]
-pub(super) struct SurfaceTiles(pub Vec<WorldTileCoords>);
+#[derive(Clone, Default)]
+pub(crate) struct SurfaceTiles(pub Vec<WorldTileCoords>);
 
 /// The terrain surface tiles the last frame's own selection drew.
 pub(crate) fn drawn_surface_tiles(world: &World) -> &[WorldTileCoords] {
@@ -13,8 +13,8 @@ pub(crate) fn drawn_surface_tiles(world: &World) -> &[WorldTileCoords] {
 }
 
 /// How many worlds over each surface tile is seen again: its copies beside the main world.
-#[derive(Default)]
-pub(super) struct SurfaceCopies(pub std::collections::HashMap<WorldTileCoords, Vec<i32>>);
+#[derive(Clone, Default)]
+pub(crate) struct SurfaceCopies(pub std::collections::HashMap<WorldTileCoords, Vec<i32>>);
 
 impl SurfaceCopies {
     /// The copies of the world the view sees its tiles in, keyed by the tile they repeat.

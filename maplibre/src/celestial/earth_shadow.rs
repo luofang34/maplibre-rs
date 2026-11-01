@@ -97,4 +97,5 @@ pub fn set_earth_shadow(world: &mut World, shadow: Option<EarthShadow>) {
         .resources
         .get_or_init_mut::<CelestialDiscs>()
         .earth_shadow = shadow;
+    super::sync_scene_lighting(world);
 }

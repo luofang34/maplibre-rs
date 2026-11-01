@@ -2,7 +2,7 @@ use cgmath::Point2;
 
 use crate::{
     coords::{
-        Quadkey, TileCoords, ViewRegion, WorldCoords, WorldTileCoords, Zoom, ZoomLevel,
+        LatLon, Quadkey, TileCoords, ViewRegion, WorldCoords, WorldTileCoords, Zoom, ZoomLevel,
         TOP_LEFT_EXTENT,
     },
     render::tile_view_pattern::DEFAULT_TILE_SIZE,
@@ -218,4 +218,21 @@ fn a_point_left_of_the_world_lies_in_the_tile_before_the_first() {
     let point = WorldCoords::from((-10.0, 20.0));
     let tile = point.into_world_tile(ZoomLevel::from(0), Zoom::new(0.0));
     assert_eq!((tile.x, tile.y), (-1, 0));
+}
+
+#[test]
+fn lat_lon_mercator_roundtrip() {
+    let origin = LatLon::new(0.0, 0.0);
+    let merc = origin.to_mercator();
+    assert!((merc.x - 0.5).abs() < 1e-10);
+    assert!((merc.y - 0.5).abs() < 1e-10);
+    let back = LatLon::from_mercator(merc);
+    assert!((back.latitude - origin.latitude).abs() < 1e-10);
+    assert!((back.longitude - origin.longitude).abs() < 1e-10);
+
+    let sf = LatLon::new(37.7749, -122.4194);
+    let sf_merc = sf.to_mercator();
+    let sf_back = LatLon::from_mercator(sf_merc);
+    assert!((sf_back.latitude - sf.latitude).abs() < 1e-10);
+    assert!((sf_back.longitude - sf.longitude).abs() < 1e-10);
 }

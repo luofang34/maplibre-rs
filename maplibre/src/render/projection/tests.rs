@@ -284,6 +284,7 @@ fn the_projection_uniform_carries_the_body_radius() {
     view.set_body(crate::projection::body::Body {
         radius_meters: 1_737_400.0,
         highest_ground_meters: 10_786.0,
+        lowest_ground_meters: -9_129.0,
     });
     let moon = super::projection_data_for_view(&style, &view).expect("valid state");
 

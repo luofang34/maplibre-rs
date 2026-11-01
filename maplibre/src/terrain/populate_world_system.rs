@@ -67,17 +67,28 @@ impl<E: Environment, T: DemTransferables> System for PopulateWorldSystem<E, T> {
                 if !tile_retry::accepts(world, coords, RequestKind::Dem, attempt) {
                     return Ok(());
                 }
-                let image = message.into_image();
-                let sample_metres = dem::sample_metres(coords, image.width(), circumference);
-                let state = match unpack
-                    .map(|unpack| DemTile::from_image_despiked(&image, unpack, sample_metres))
-                {
-                    Some(Ok(tile)) => DemTileComponent::Loaded(LoadedDem::new(tile)),
-                    Some(Err(error)) => {
-                        tracing::warn!(%coords, %error, "DEM tile image is unusable");
-                        DemTileComponent::Missing
+                let decode_fallback = |image: &image::RgbaImage| {
+                    let sample_metres = dem::sample_metres(coords, image.width(), circumference);
+                    match unpack
+                        .map(|unpack| DemTile::from_image_despiked(image, unpack, sample_metres))
+                    {
+                        Some(Ok(tile)) => DemTileComponent::Loaded(LoadedDem::new(tile)),
+                        Some(Err(error)) => {
+                            tracing::warn!(%coords, %error, "DEM tile image is unusable");
+                            DemTileComponent::Missing
+                        }
+                        None => DemTileComponent::Missing,
                     }
-                    None => DemTileComponent::Missing,
+                };
+                let state = match message.into_shared_dem() {
+                    Ok((tile, cached_circumference, _))
+                        if unpack.is_some_and(|u| u == tile.unpack())
+                            && (cached_circumference - circumference).abs() <= 1e-3 =>
+                    {
+                        DemTileComponent::Loaded(LoadedDem::from_shared(tile))
+                    }
+                    Ok((_, _, fallback)) => decode_fallback(&fallback),
+                    Err(image) => decode_fallback(&image),
                 };
                 (coords, state)
             } else {

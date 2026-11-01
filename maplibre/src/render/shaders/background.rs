@@ -5,9 +5,11 @@ use thiserror::Error;
 
 use super::{Mat4x4f32, Shader, ShaderTileMetadata};
 use crate::{
-    celestial::CelestialLighting,
     projection::{body::Body, globe::camera::GlobeCameraState},
-    render::resource::{FragmentState, VertexBufferLayout, VertexState},
+    render::{
+        resource::{FragmentState, VertexBufferLayout, VertexState},
+        SceneLighting,
+    },
     style::light::{LightError, LightSpecification},
 };
 
@@ -136,7 +138,7 @@ impl AtmosphereLayerMetadata {
     pub fn from_view(
         camera: &GlobeCameraState,
         light: &LightSpecification,
-        sky: CelestialLighting,
+        sky: SceneLighting,
         zoom: f64,
         blend: f32,
     ) -> Result<Self, AtmosphereMetadataError> {
@@ -148,9 +150,9 @@ impl AtmosphereLayerMetadata {
             .globe_center_in_view()
             .cast::<f32>()
             .ok_or(AtmosphereMetadataError::FloatConversion)?;
-        let sun_direction = match sky.sun {
+        let sun_direction = match sky.sun_direction {
             Some(sun) => camera
-                .world_direction_to_view(sun.globe_world())
+                .world_direction_to_view(sun)
                 .ok_or(LightError::InvalidViewDirection),
             None => light.sun_direction_in_view(camera, zoom),
         }
@@ -168,7 +170,7 @@ impl AtmosphereLayerMetadata {
                 sun_direction.x,
                 sun_direction.y,
                 sun_direction.z,
-                sky.sun_visible.get(),
+                sky.sun_visible(),
             ],
             radius_blend_padding: [
                 radius,

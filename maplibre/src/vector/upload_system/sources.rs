@@ -11,13 +11,21 @@ use crate::{
 
 pub(super) fn terrain_sources(world: &World, style: &Style) -> Vec<WorldTileCoords> {
     let max_zoom = source_max_zoom(style, TileKind::Vector);
-    let targets = std::iter::once(WorldTileCoords::default()).chain(
-        world
-            .resources
-            .get::<DrapeRequests>()
-            .into_iter()
-            .flat_map(|requests| requests.0.iter().copied()),
-    );
+    let targets = std::iter::once(WorldTileCoords::default())
+        .chain(
+            world
+                .resources
+                .get::<DrapeRequests>()
+                .into_iter()
+                .flat_map(|requests| requests.0.iter().copied()),
+        )
+        .chain(
+            world
+                .resources
+                .get::<crate::render::eye_covering::SlotResidencyFloor>()
+                .into_iter()
+                .flat_map(|floor| floor.retained_drapes.iter().copied()),
+        );
     let selected = select_targets(targets, world, &[]);
     let mut seen = HashSet::new();
     let mut sources = Vec::new();

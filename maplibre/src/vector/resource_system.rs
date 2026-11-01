@@ -88,10 +88,11 @@ pub fn resource_system(
         format: surface.surface_format(),
         multisampling: surface.is_multisampling_supported(settings.msaa),
         projection: projection_resources.bind_group_layout(),
-        pattern: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("pattern layout"),
-            entries: &super::pattern::layout_entries(),
-        }),
+        pattern: crate::render::resource::create_bind_group_layout_cached(
+            device,
+            Some("pattern layout"),
+            &super::pattern::layout_entries(),
+        ),
     };
     setup.initialize(
         vector_pipeline,

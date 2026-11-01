@@ -2,7 +2,6 @@ use cgmath::Point2;
 
 use super::AtmosphereLayerMetadata;
 use crate::{
-    celestial::{CelestialLighting, EcefDirection},
     coords::LatLon,
     projection::{
         body::Body,
@@ -11,6 +10,7 @@ use crate::{
             lat_lon_to_unit_sphere,
         },
     },
+    render::SceneLighting,
     style::light::LightSpecification,
 };
 
@@ -75,17 +75,16 @@ fn host_sun_replaces_the_style_light() {
         serde_json::from_str(r#"{"anchor":"map","position":[1.5,90,90]}"#)
             .expect("light should parse");
     // The sun stands over the camera's own center, 0°N 160°E.
-    let longitude = 160_f64.to_radians();
-    let sun = EcefDirection::new(longitude.cos(), longitude.sin(), 0.0).expect("direction");
+    let sun = lat_lon_to_unit_sphere(LatLon::new(0.0, 160.0));
     let expected = camera
-        .world_direction_to_view(lat_lon_to_unit_sphere(LatLon::new(0.0, 160.0)))
+        .world_direction_to_view(sun)
         .expect("view direction");
 
     let from_host = AtmosphereLayerMetadata::from_view(
         &camera,
         &light,
-        CelestialLighting {
-            sun: Some(sun),
+        SceneLighting {
+            sun_direction: Some(sun),
             ..Default::default()
         },
         1.0,

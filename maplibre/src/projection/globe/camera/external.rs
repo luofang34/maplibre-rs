@@ -68,7 +68,18 @@ impl GlobeCameraState {
             target_elevation_meters: 0.0,
             ..options
         };
-        let clipping_plane = super::horizon_plane(eye.position, 1.0)?;
+        let lowest_radius = options
+            .body
+            .unit_radius_at(options.body.lowest_ground_meters)
+            .min(1.0);
+        let distance = eye.position.magnitude();
+        let clearance = 0.25 / options.body.radius_meters;
+        let horizon_radius = if distance > lowest_radius {
+            (distance - clearance).clamp(lowest_radius, 1.0)
+        } else {
+            lowest_radius
+        };
+        let clipping_plane = super::horizon_plane(eye.position, horizon_radius)?;
         let radius = super::radius_pixels(options);
         // The eye's axes are expressed in sphere space, so their transpose takes sphere
         // space into the eye's; the sphere is scaled to pixels first.

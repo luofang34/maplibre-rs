@@ -80,7 +80,13 @@ fn fill_border(
     let result = target_dem
         .tile
         .validate_neighbour(source_dim, source_unpack)
-        .and_then(|()| target_dem.tile.fill_border(dx, dy, &samples));
+        .and_then(|()| {
+            if target_dem.tile.border_matches(dx, dy, &samples)? {
+                Ok(false)
+            } else {
+                std::sync::Arc::make_mut(&mut target_dem.tile).fill_border(dx, dy, &samples)
+            }
+        });
     match result {
         Ok(true) => target_dem.revision = target_dem.revision.wrapping_add(1),
         Ok(false) => {}

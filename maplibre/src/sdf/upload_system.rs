@@ -29,11 +29,19 @@ pub fn upload_system(
         world,
         style,
         view_state,
-        renderer: Renderer { device, queue, .. },
+        renderer:
+            Renderer {
+                device,
+                queue,
+                settings,
+                ..
+            },
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    if crate::render::eye_covering::EyeInFrame::reuses_content(world) {
+    if settings.symbol_pools.is_empty()
+        || crate::render::eye_covering::EyeInFrame::reuses_content(world)
+    {
         return Ok(());
     }
     let visible = super::covering::upload_tiles(world);

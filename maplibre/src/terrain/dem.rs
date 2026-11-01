@@ -241,6 +241,30 @@ impl DemTile {
         Ok(samples)
     }
 
+    /// Returns whether the border facing `(dx, dy)` already equals `samples`.
+    pub fn border_matches(&self, dx: i32, dy: i32, samples: &[u8]) -> Result<bool, DemError> {
+        let dim = i64::from(self.dim);
+        let (x_range, y_range) = Self::border_region(dim, dx, dy)?;
+        let expected =
+            (x_range.end - x_range.start) as usize * (y_range.end - y_range.start) as usize * 4;
+        if samples.len() != expected {
+            return Err(DemError::BorderLength {
+                dx,
+                dy,
+                expected,
+                actual: samples.len(),
+            });
+        }
+        let mut positions = y_range.flat_map(|y| x_range.clone().map(move |x| (x, y)));
+        Ok(positions
+            .by_ref()
+            .zip(samples.as_chunks::<4>().0.iter())
+            .all(|((x, y), pixel)| {
+                let index = self.byte_index(x, y);
+                &self.pixels[index..index + 4] == pixel
+            }))
+    }
+
     /// Writes samples produced by a neighbour's [`edge_samples`](Self::edge_samples) into the
     /// border facing that neighbour at `(dx, dy)`.
     /// Returns whether any pixels changed.

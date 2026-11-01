@@ -19,8 +19,8 @@ use crate::{
     },
 };
 mod globe;
-#[derive(Default)]
-pub(super) struct TerrainEyeFrame(pub Vec<(WorldTileCoords, TerrainTileUniforms)>);
+#[derive(Clone, Default)]
+pub(crate) struct TerrainEyeFrame(pub Vec<(WorldTileCoords, TerrainTileUniforms)>);
 
 pub(super) fn replay(
     world: &mut World,
@@ -29,10 +29,20 @@ pub(super) fn replay(
     queue: &crate::render::upload_queue::UploadQueue,
 ) -> SystemResult {
     let fog = terrain_fog(style, view);
-    let lighting = (
-        crate::celestial::lighting(world),
-        crate::celestial::discs(world),
-    );
+    let lighting = world
+        .resources
+        .get::<crate::render::SceneLighting>()
+        .copied()
+        .unwrap_or_default();
+    let drape_mode = world
+        .resources
+        .get::<crate::render::settings::TerrainDrapeMode>()
+        .copied()
+        .or_else(|| match world.resources.get::<Eventually<TerrainResources>>() {
+            Some(Initialized(terrain)) => Some(terrain.drape_mode()),
+            _ => None,
+        })
+        .unwrap_or_default();
     let projection = view.gpu_view_projection();
     if let Some(frame) = world.resources.get_mut::<TerrainEyeFrame>() {
         for (coords, uniform) in &mut frame.0 {
@@ -45,7 +55,7 @@ pub(super) fn replay(
             uniform.fog_range = [fog.near, fog.far, fog.ground_blend, fog.horizon_blend];
             uniform.fog_opacity[0] = fog.opacity;
             uniform.fog_opacity[1] = f32::from(fog.globe);
-            surface_uniforms(uniform, *coords, (style, lighting), view);
+            surface_uniforms(uniform, *coords, (style, lighting, drape_mode), view);
         }
     }
     if let (Some(frame), Some(Initialized(terrain))) = (
@@ -174,6 +184,8 @@ pub(super) fn tile_uniforms(
         daylight: [0.0; 4],
         twilight: [0.0; 4],
         moonlight: [0.0; 4],
+        procedural_relief: [0.0; 4],
+        procedural_grid: [0.0; 4],
     })
 }
 
@@ -219,15 +231,17 @@ pub(super) fn surface_settings(
     world: &World,
 ) -> (
     crate::terrain::TerrainSkirts,
-    crate::celestial::TerrainLight,
+    crate::render::SceneLighting,
 ) {
     let skirts = world.resources.get::<crate::terrain::TerrainSkirts>();
+    let lighting = world
+        .resources
+        .get::<crate::render::SceneLighting>()
+        .copied()
+        .unwrap_or_default();
     (
         skirts.copied().unwrap_or_default(),
-        (
-            crate::celestial::lighting(world),
-            crate::celestial::discs(world),
-        ),
+        lighting,
     )
 }
 
@@ -239,7 +253,7 @@ pub(super) fn prepare_tiles(
     (dem, skirts, lighting): (
         &DemSource,
         crate::terrain::TerrainSkirts,
-        crate::celestial::TerrainLight,
+        crate::render::SceneLighting,
     ),
 ) -> PreparedTerrain {
     let (specs, drape_sources) = targets;
@@ -276,7 +290,12 @@ pub(super) fn prepare_tiles(
         ) else {
             continue;
         };
-        surface_uniforms(&mut block, spec.coords, (style, lighting), view_state);
+        surface_uniforms(
+            &mut block,
+            spec.coords,
+            (style, lighting, terrain.drape_mode()),
+            view_state,
+        );
         uniforms.push(block);
         sources.push((dem_coords, spec.coords, drape_source));
     }
@@ -327,13 +346,17 @@ pub(super) fn with_world_copies(
 fn surface_uniforms(
     block: &mut TerrainTileUniforms,
     coords: WorldTileCoords,
-    (style, (lighting, discs)): (&Style, crate::celestial::TerrainLight),
+    (style, lighting, drape_mode): (
+        &Style,
+        crate::render::SceneLighting,
+        crate::render::settings::TerrainDrapeMode,
+    ),
     view: &ViewState,
 ) {
     globe::set_uniforms(block, coords, view);
-    [block.daylight, block.twilight] = lighting.daylight_uniforms();
-    block.moonlight =
-        crate::celestial::moonlight_uniform(lighting.sun, discs.moon, discs.earth_shadow);
+    block.daylight = lighting.daylight_uniform();
+    block.twilight = lighting.twilight;
+    block.moonlight = lighting.moonlight;
     let color = super::background_clear_color(style);
     block.surface_color = [
         color.r as f32,
@@ -344,4 +367,29 @@ fn surface_uniforms(
     block.relief_strength = if view.has_external_view() { 0.45 } else { 0.0 };
     block.fog_opacity[3] = f32::from(view.has_external_view());
     block.fog_position = view.eye_fog_position(coords).unwrap_or([0.0; 4]);
+    match drape_mode {
+        crate::render::settings::TerrainDrapeMode::ProceduralRelief(relief) => {
+            let tiles_across = 2_f64.powi(i32::from(u8::from(coords.z)));
+            let merc_u =
+                std::f64::consts::PI * (1.0 - 2.0 * ((f64::from(coords.y) + 0.5) / tiles_across));
+            let tile_span_m =
+                (view.body().circumference_meters() / tiles_across / merc_u.cosh()).max(1.0) as f32;
+            block.procedural_relief = [
+                1.0,
+                f32::from(relief.hypsometric),
+                relief.slope_shading,
+                relief.reference_altitude_meters.unwrap_or(0.0),
+            ];
+            block.procedural_grid = [
+                relief.grid_spacing_meters,
+                relief.grid_opacity,
+                f32::from(relief.reference_altitude_meters.is_some()),
+                tile_span_m,
+            ];
+        }
+        crate::render::settings::TerrainDrapeMode::Draped { .. } => {
+            block.procedural_relief = [0.0; 4];
+            block.procedural_grid = [0.0; 4];
+        }
+    }
 }

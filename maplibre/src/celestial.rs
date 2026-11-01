@@ -188,8 +188,21 @@ pub struct CelestialLighting {
     pub sun_visible: VisibleFraction,
 }
 
-/// What lights the terrain: the host's sky and its Moon.
-pub(crate) type TerrainLight = (CelestialLighting, CelestialDiscs);
+/// Synchronizes the neutral SceneLighting resource with current celestial state.
+pub fn sync_scene_lighting(world: &mut World) {
+    let lighting = lighting(world);
+    let discs = discs(world);
+    let sun_direction = lighting.sun.map(|sun| sun.globe_world());
+    let mut twilight = lighting.twilight.uniform();
+    twilight[3] = lighting.sun_visible.get();
+    let moonlight = moonlight_uniform(lighting.sun, discs.moon, discs.earth_shadow);
+    world.resources.insert(crate::render::SceneLighting {
+        sun_direction,
+        twilight,
+        moonlight,
+        atmosphere: lighting.atmosphere,
+    });
+}
 
 /// The Moon's light on the night side: its direction in globe world axes and, as w, the
 /// light it adds overhead: [`MOONLIGHT_GAIN`] times its lit fraction (1 − cos elongation) / 2,
@@ -253,6 +266,7 @@ pub fn set_twilight_band(world: &mut World, twilight: TwilightBand) {
         .resources
         .get_or_init_mut::<CelestialLighting>()
         .twilight = twilight;
+    sync_scene_lighting(world);
 }
 
 /// Draws the globe's atmosphere without a style `sky`, or leaves it to the style.
@@ -261,11 +275,13 @@ pub fn set_atmosphere(world: &mut World, atmosphere: bool) {
         .resources
         .get_or_init_mut::<CelestialLighting>()
         .atmosphere = atmosphere;
+    sync_scene_lighting(world);
 }
 
 /// Sets or clears the sun direction the render systems read.
 pub fn set_sun_direction(world: &mut World, sun: Option<EcefDirection>) {
     world.resources.get_or_init_mut::<CelestialLighting>().sun = sun;
+    sync_scene_lighting(world);
 }
 
 mod discs;

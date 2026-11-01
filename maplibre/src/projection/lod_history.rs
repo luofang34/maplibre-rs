@@ -5,7 +5,7 @@ use crate::coords::{TileCoords, WorldTileCoords};
 
 const ZOOM_MARGIN: f64 = 0.15;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub(crate) struct LodHistory {
     leaves: HashSet<WorldTileCoords>,
     refined: HashSet<WorldTileCoords>,

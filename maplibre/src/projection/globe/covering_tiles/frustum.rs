@@ -135,12 +135,16 @@ fn adjust_far_plane(points: &mut [Vector3<f64>; 8], horizon: Vector4<f64>, beyon
     }
     let near_plane = normalized_near_plane(*points);
     if let Some(ideal_distance) = ideal_far_distance(horizon, near_plane) {
-        let ideal_ray_length = ideal_distance / directions[0].dot(near_plane.truncate());
-        maximum_distance = maximum_distance.min(ideal_ray_length);
+        let cos_angle = directions[0].dot(near_plane.truncate());
+        if cos_angle > f64::EPSILON {
+            let ideal_ray_length = (ideal_distance / cos_angle).max(0.0);
+            maximum_distance = maximum_distance.min(ideal_ray_length);
+        }
     }
     maximum_distance += beyond_horizon;
     for index in 0..4 {
-        let target = maximum_distance.min(lengths[index]);
+        let min_length = (lengths[index] * 1e-6).max(1e-12);
+        let target = maximum_distance.clamp(min_length, lengths[index]);
         points[index] = points[index + 4] + directions[index] * target;
     }
 }

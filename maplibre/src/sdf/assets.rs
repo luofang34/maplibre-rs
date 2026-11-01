@@ -10,7 +10,7 @@ mod cache;
 mod load;
 mod provider;
 pub mod wire;
-pub(crate) use cache::fetch;
+pub(crate) use cache::{fetch, tiles};
 pub use cache::{AssetCache, AssetFailure};
 pub(crate) use load::load_symbol_assets_awaiting;
 pub use load::{load_symbol_assets, SymbolAssetConfig, SymbolAssetError};

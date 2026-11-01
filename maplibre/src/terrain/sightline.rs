@@ -13,7 +13,7 @@
 //!
 //! These lines of sight are the reference for what the frame hides. The overlay's depth test
 //! and its depth probes stand in for them on the GPU, at no cost per point, and differ from
-//! them only by the depth bias and the pixel the GPU tests a point at, as [`crate::overlay`]
+//! them only by the depth bias and the pixel the GPU tests a point at, as the overlay plugin
 //! describes.
 
 use std::collections::HashMap;
@@ -381,17 +381,12 @@ impl TileFootprint {
 
 /// Mercator coordinates in `0..1` of a geographic location.
 pub(crate) fn lat_lon_to_mercator(location: LatLon) -> Point2<f64> {
-    let x = location.longitude / 360.0 + 0.5;
-    let y = (1.0 - location.latitude.to_radians().tan().asinh() / std::f64::consts::PI) * 0.5;
-    Point2::new(x, y.clamp(0.0, MAX_MERCATOR_Y))
+    location.to_mercator()
 }
 
 /// The location of Mercator coordinates in `0..1`.
 pub(crate) fn mercator_to_lat_lon(mercator: Point2<f64>) -> LatLon {
-    LatLon::new(
-        mercator_y_to_latitude(mercator.y).to_degrees(),
-        mercator.x * 360.0 - 180.0,
-    )
+    LatLon::from_mercator(mercator)
 }
 
 fn mercator_y_to_latitude(y: f64) -> f64 {

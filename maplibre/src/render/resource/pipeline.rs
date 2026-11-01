@@ -39,12 +39,16 @@ impl RenderPipelineDescriptor {
     /// Creates a pipeline with shared bind-group layouts before descriptor-owned layouts.
     /// Shader group indices must account for the prefix length. Prefix layouts and shader
     /// interfaces must be compatible with `device`; validation errors use wgpu's error scopes
-    /// or uncaptured-error handler. Every call creates fresh shader modules and a pipeline.
+    /// or uncaptured-error handler. When a [`SharedPipelines`](super::SharedPipelines) scope is
+    /// active on the calling thread, compiled shader modules and pipelines are reused.
     pub fn initialize_with_prefix_layouts(
         &self,
         device: &wgpu::Device,
         prefix_layouts: &[&wgpu::BindGroupLayout],
     ) -> wgpu::RenderPipeline {
+        if let Some(cache) = super::pipeline_cache::SharedPipelines::active() {
+            return cache.render_pipeline(device, self, prefix_layouts);
+        }
         let bind_group_layouts = if let Some(layout) = &self.layout {
             layout
                 .iter()

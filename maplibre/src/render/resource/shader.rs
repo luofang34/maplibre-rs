@@ -1,7 +1,7 @@
 //! Owned vertex layouts and WGSL stage descriptions used to construct render pipelines.
 
 /// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VertexBufferLayout {
     /// The stride, in bytes, between elements of this buffer.
     pub array_stride: wgpu::BufferAddress,
@@ -12,7 +12,7 @@ pub struct VertexBufferLayout {
 }
 
 /// Describes the fragment process in a render pipeline.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FragmentState {
     /// WGSL source compiled when the pipeline is initialized.
     pub source: &'static str,
@@ -24,7 +24,7 @@ pub struct FragmentState {
 }
 
 /// WGSL vertex stage and the ordered buffer layouts bound to its input slots.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VertexState {
     /// WGSL source compiled when the pipeline is initialized.
     pub source: &'static str,

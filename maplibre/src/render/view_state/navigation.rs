@@ -423,10 +423,7 @@ impl ViewState {
             -scale::MERCATOR_LATITUDE_LIMIT,
             scale::MERCATOR_LATITUDE_LIMIT,
         );
-        let mercator = crate::terrain::sightline::lat_lon_to_mercator(LatLon::new(
-            latitude,
-            view.center.longitude,
-        ));
+        let mercator = LatLon::new(latitude, view.center.longitude).to_mercator();
         self.update_zoom(zoom);
         let camera = self.camera_mut();
         camera.move_to(Point2::new(

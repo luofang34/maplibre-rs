@@ -13,7 +13,7 @@ use std::{
 use bytemuck_derive::{Pod, Zeroable};
 #[cfg(test)]
 use cgmath::Vector4;
-use cgmath::{AbsDiffEq, Matrix4, Point3, Vector3};
+use cgmath::{AbsDiffEq, Matrix4, Point2, Point3, Vector3};
 use serde::{Deserialize, Serialize};
 pub use tile::{AlignedWorldTileCoords, InnerCoords, TileCoords, WorldTileCoords};
 
@@ -166,6 +166,20 @@ impl LatLon {
             latitude,
             longitude,
         }
+    }
+
+    /// Projects this geographic location to normalized Mercator coordinates in `[0..1] x [0..1]`.
+    pub fn to_mercator(&self) -> Point2<f64> {
+        let x = self.longitude / 360.0 + 0.5;
+        let y = (1.0 - self.latitude.to_radians().tan().asinh() / PI) * 0.5;
+        Point2::new(x, y.clamp(0.0, 1.0 - 1e-9))
+    }
+
+    /// Converts normalized Mercator coordinates in `[0..1] x [0..1]` back to geographic coordinates.
+    pub fn from_mercator(mercator: Point2<f64>) -> Self {
+        let lat = (PI * (1.0 - 2.0 * mercator.y)).sinh().atan().to_degrees();
+        let lon = mercator.x * 360.0 - 180.0;
+        LatLon::new(lat, lon)
     }
 }
 

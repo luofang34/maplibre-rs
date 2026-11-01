@@ -56,17 +56,37 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
         }: &mut MapContext,
     ) -> SystemResult {
         tile_retry::stop_cancelled(world, self.kernel.apc());
+        let vectors_disabled = renderer.settings.buffer_pools.is_empty();
+        let symbols_disabled = renderer.settings.symbol_pools.is_empty();
+        if vectors_disabled && symbols_disabled {
+            return Ok(());
+        }
         let pixel_ratio = display_pixel_ratio(world, renderer, view_state);
-        let view_region = view_region_for_projection(
-            style,
-            view_state,
-            world,
-            view_state.zoom().zoom_level(DEFAULT_TILE_SIZE),
-            ViewStatePadding::Loose,
-        )?;
+        let multi = world
+            .resources
+            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
+            .filter(|m| m.active)
+            .cloned();
+        let view_tiles_and_level = if let Some(multi) = &multi {
+            Some((multi.vector_tiles.clone(), multi.max_view_level))
+        } else {
+            view_region_for_projection(
+                style,
+                view_state,
+                world,
+                view_state.zoom().zoom_level(DEFAULT_TILE_SIZE),
+                ViewStatePadding::Loose,
+            )?
+            .map(|region| {
+                (
+                    region.iter().collect::<Vec<_>>(),
+                    u8::from(view_state.zoom().zoom_level(DEFAULT_TILE_SIZE)),
+                )
+            })
+        };
 
         // Tile arrivals, eviction and a settling eye can change the covering without motion.
-        if let Some(view_region) = &view_region {
+        if let Some((view_tiles, level)) = view_tiles_and_level {
             let max_zoom = source_max_zoom(style, TileKind::Vector);
             let min_zoom = source_min_zoom(style, TileKind::Vector);
             let mut requested = HashSet::new();
@@ -92,11 +112,10 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
                 });
             let draped = style.terrain.is_some();
             let magnifies = depends_on_overscaling(style);
-            let level = u8::from(view_state.zoom().zoom_level(DEFAULT_TILE_SIZE));
             for coords in overview
                 .into_iter()
                 .chain(drapes)
-                .chain(view_region.iter().filter(|_| !draped))
+                .chain(view_tiles.into_iter().filter(|_| !draped))
                 .chain(prefetch)
             {
                 // Past the deepest source zoom the ancestor tile is fetched once and the view
@@ -138,7 +157,11 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
                     world,
                     (overscaled_zoom, pixel_ratio),
                     only_sources,
+                    (vectors_disabled, symbols_disabled),
                 )?;
+            }
+            if let Some(multi) = &multi {
+                requested.extend(multi.skipped_wanted_vector.iter().copied());
             }
             tile_retry::want(world, RequestKind::Vector, &requested);
             self.release_unwanted(world, &requested);
@@ -229,18 +252,26 @@ impl<E: Environment, T: VectorTransferables> RequestSystem<E, T> {
         world: &mut crate::tcs::world::World,
         (overscaled_zoom, pixel_ratio): (u8, f32),
         only_sources: Option<Vec<String>>,
+        (vectors_disabled, symbols_disabled): (bool, bool),
     ) -> SystemResult {
         if world.tiles.spawn_mut(coords).is_none() {
             return Err(SystemError::InvalidTile { coords });
         }
         let attempt = tile_retry::next_attempt(world);
         let issued_for = only_sources.clone();
+        let mut worker_style = style.clone();
+        if symbols_disabled {
+            worker_style.layers.retain(|layer| layer.type_ != "symbol");
+        }
+        if vectors_disabled {
+            worker_style.layers.retain(|layer| layer.type_ == "symbol");
+        }
         self.kernel
             .apc()
             .call(
                 Input::TrackedTileRequest {
                     coords,
-                    style: style.clone(),
+                    style: worker_style,
                     attempt,
                     overscaled_zoom,
                     pixel_ratio,

@@ -128,6 +128,25 @@ pub struct BufferPoolSizes {
     pub layer_metadata: u64,
 }
 
+impl BufferPoolSizes {
+    /// Zero-capacity pool configuration that disables geometry uploads for a pool family
+    /// without creating invalid zero-sized GPU buffers.
+    pub const EMPTY: Self = Self {
+        vertices: 0,
+        indices: 0,
+        feature_metadata: 0,
+        layer_metadata: 0,
+    };
+
+    /// Returns `true` when every pool sub-allocation capacity is zero.
+    pub const fn is_empty(&self) -> bool {
+        self.vertices == 0
+            && self.indices == 0
+            && self.feature_metadata == 0
+            && self.layer_metadata == 0
+    }
+}
+
 impl Default for BufferPoolSizes {
     fn default() -> Self {
         Self {
@@ -135,6 +154,77 @@ impl Default for BufferPoolSizes {
             indices: 10 * 1_000_000,
             feature_metadata: 10 * 1024 * 1000,
             layer_metadata: 10 * 1024,
+        }
+    }
+}
+
+/// Styling parameters for [`TerrainDrapeMode::ProceduralRelief`], shading pure 3D DEM relief
+/// directly in `MAIN_PASS` without allocating `DrapeScratch` or `DrapeCache`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProceduralReliefStyle {
+    /// Optional host reference altitude in metres MSL (e.g. ownship altitude for TAWS
+    /// relative-elevation amber/red terrain awareness bands). `None` disables TAWS bands.
+    pub reference_altitude_meters: Option<f32>,
+    /// Enables hypsometric elevation color ramp based on stitched DEM elevation (metres MSL).
+    pub hypsometric: bool,
+    /// Analytical DEM surface-normal hillshade strength (`0.0..=1.0`, default `0.65`).
+    pub slope_shading: f32,
+    /// Ground metric gridline spacing in metres (`<= 0.0` disables gridlines; default `1000.0`).
+    pub grid_spacing_meters: f32,
+    /// Opacity of procedural metric gridlines (`0.0..=1.0`, default `0.18`).
+    pub grid_opacity: f32,
+}
+
+impl Default for ProceduralReliefStyle {
+    fn default() -> Self {
+        Self {
+            reference_altitude_meters: None,
+            hypsometric: true,
+            slope_shading: 0.65,
+            grid_spacing_meters: 1000.0,
+            grid_opacity: 0.18,
+        }
+    }
+}
+
+/// Controls whether 3D terrain bakes per-tile 2D style drapes (`DRAPE_PASS`) or shades pure
+/// procedural DEM relief directly in `MAIN_PASS`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TerrainDrapeMode {
+    /// Bakes drapeable style layers into mipmapped per-tile textures of `edge_px × edge_px`.
+    Draped {
+        /// Edge length in pixels of each drape texture (clamped to `>= MIN_DRAPE_SIZE`).
+        edge_px: u32,
+    },
+    /// Allocates zero `DrapeScratch` and zero `DrapeCache` textures, shading stitched DEM
+    /// elevation, analytical surface normal, optional TAWS relative-altitude bands, and
+    /// procedural metric gridlines directly in `MAIN_PASS`.
+    ProceduralRelief(ProceduralReliefStyle),
+}
+
+impl TerrainDrapeMode {
+    /// Default [`TerrainDrapeMode::ProceduralRelief`] with hypsometric bands, analytical slope
+    /// shading, and `1 km` gridlines.
+    pub const fn procedural_relief() -> Self {
+        Self::ProceduralRelief(ProceduralReliefStyle {
+            reference_altitude_meters: None,
+            hypsometric: true,
+            slope_shading: 0.65,
+            grid_spacing_meters: 1000.0,
+            grid_opacity: 0.18,
+        })
+    }
+
+    /// Returns `true` when drape baking is disabled in favor of direct procedural DEM relief.
+    pub const fn is_procedural_relief(&self) -> bool {
+        matches!(self, Self::ProceduralRelief(_))
+    }
+}
+
+impl Default for TerrainDrapeMode {
+    fn default() -> Self {
+        Self::Draped {
+            edge_px: crate::terrain::resources::DRAPE_SIZE,
         }
     }
 }
@@ -159,12 +249,34 @@ pub struct RendererSettings {
     /// [`DRAPE_SIZE`](crate::terrain::resources::DRAPE_SIZE) holds about 21 MiB a tile; a
     /// phone, which shares its memory with the GPU, keeps more tiles in less.
     pub terrain_drape_size: u32,
+    /// Whether terrain bakes 2D style drapes (`DRAPE_PASS`) or shades procedural DEM relief
+    /// directly in `MAIN_PASS` (`TerrainDrapeMode::ProceduralRelief`).
+    pub terrain_drape_mode: TerrainDrapeMode,
     /// Draws every layer fragment as an equal step of grey added to what is below, so the
     /// brightness of a pixel counts how often it was drawn, as GL JS's overdraw inspector does.
     pub overdraw_inspector: bool,
+    /// Allocates and populates a persistent single-sample reversed-Z `Depth32Float` attachment
+    /// via `DEPTH_COPY` on offscreen targets so hosts can sample or copy depth without `XrFrame`.
+    pub depth_readout: bool,
 }
 
 impl RendererSettings {
+    /// Resolves the active [`TerrainDrapeMode`], honoring legacy `terrain_drape_size` overrides
+    /// when `terrain_drape_mode` was left at its default.
+    pub fn effective_terrain_drape_mode(&self) -> TerrainDrapeMode {
+        match self.terrain_drape_mode {
+            TerrainDrapeMode::ProceduralRelief(style) => TerrainDrapeMode::ProceduralRelief(style),
+            TerrainDrapeMode::Draped { edge_px }
+                if edge_px != crate::terrain::resources::DRAPE_SIZE =>
+            {
+                TerrainDrapeMode::Draped { edge_px }
+            }
+            TerrainDrapeMode::Draped { .. } => TerrainDrapeMode::Draped {
+                edge_px: self.terrain_drape_size,
+            },
+        }
+    }
+
     pub(super) fn with_backend_msaa(mut self, backend: wgpu::Backend) -> Self {
         // Symbol occlusion and compositor depth copies sample the depth attachment.
         // WebGL supports multisampled renderbuffers, but cannot sample their depth.
@@ -193,11 +305,13 @@ impl Default for RendererSettings {
             buffer_pools: BufferPoolSizes::default(),
             symbol_pools: BufferPoolSizes::default(),
             terrain_drape_size: crate::terrain::resources::DRAPE_SIZE,
+            terrain_drape_mode: TerrainDrapeMode::default(),
             texture_format: None,
 
             depth_texture_format: TextureFormat::Depth24PlusStencil8,
             present_mode: PresentMode::AutoVsync,
             overdraw_inspector: false,
+            depth_readout: false,
         }
     }
 }

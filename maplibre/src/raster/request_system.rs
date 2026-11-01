@@ -60,7 +60,16 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
         // Missing ancestors and deferred tiles must progress while the camera is stationary.
         // Each raster source covers the view at its own tile size and rounding, as GL JS's
         // per-source tile managers do; the tiles of every source are requested together.
-        let regions = raster_source_regions(style, view_state, world, ViewStatePadding::Loose)?;
+        let multi = world
+            .resources
+            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
+            .filter(|m| m.active)
+            .cloned();
+        let regions = if let Some(multi) = &multi {
+            multi.raster_regions.clone()
+        } else {
+            raster_source_regions(style, view_state, world, ViewStatePadding::Loose)?
+        };
         let mut requested = HashSet::new();
         let mut budget = request_budget(world);
         let wanted = wanted_tiles(regions, style, world);
@@ -97,6 +106,9 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
 
             self.request(coords, style, world)?;
         }
+        if let Some(multi) = &multi {
+            requested.extend(multi.skipped_wanted_raster.iter().copied());
+        }
         tile_retry::want(world, RequestKind::Raster, &requested);
 
         Ok(())
@@ -123,6 +135,61 @@ pub fn fetch_raster_apc<K: OffscreenKernel, T: RasterTransferables, C: Context +
                     context,
                 )
                 .await?;
+                continue;
+            }
+            if group.source.format(&coords).is_some() {
+                use crate::sdf::assets::tiles::CachedTileFailure;
+                match client.assets().load_raster_tile(&client, &group.source, &coords).await {
+                    Ok(rgba) => {
+                        let mut process_context = ProcessRasterContext::<T, _>::new(context.clone());
+                        if let Err(ProcessRasterError::Send(source)) = process_context
+                            .finish_decoded(
+                                &coords,
+                                RasterSourceId::new(group.source_name.clone()),
+                                (*rgba).clone(),
+                            )
+                        {
+                            return Err(ProcedureError::Send(source));
+                        }
+                    }
+                    Err(CachedTileFailure::Decode(error)) => {
+                        tracing::warn!(%coords, source = ?group.source_name, %error, "invalid raster tile");
+                        context
+                            .send_back(T::LayerRasterMissing::build_from(
+                                coords,
+                                RasterSourceId::new(group.source_name.clone()),
+                            ))
+                            .map_err(ProcedureError::Send)?;
+                    }
+                    Err(CachedTileFailure::NotFound) => {
+                        tracing::debug!(
+                            %coords,
+                            source = ?group.source_name,
+                            "no raster tile at the source; the layer is empty"
+                        );
+                        context
+                            .send_back(<T as RasterTransferables>::LayerRasterMissing::build_from(
+                                coords,
+                                RasterSourceId::new(group.source_name.clone()),
+                            ))
+                            .map_err(ProcedureError::Send)?;
+                    }
+                    Err(CachedTileFailure::Transport { retryable, message }) => {
+                        retry |= retryable;
+                        tracing::error!(
+                            %coords,
+                            source = ?group.source_name,
+                            error = %message,
+                            "raster tile fetch failed"
+                        );
+                        context
+                            .send_back(<T as RasterTransferables>::LayerRasterMissing::build_from(
+                                coords,
+                                RasterSourceId::new(group.source_name.clone()),
+                            ))
+                            .map_err(ProcedureError::Send)?;
+                    }
+                }
                 continue;
             }
             match client.fetch(&coords, &group.source).await {

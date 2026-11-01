@@ -98,8 +98,31 @@ impl System for ResourceSystem {
             },
             &(size.width(), size.height()),
         );
-        if state.eye_depth_target.is_some() {
-            depth_copy.initialize(|| DepthCopyPipeline::new(device, depth_msaa.samples));
+        if settings.depth_readout {
+            state.depth_readout_texture.reinitialize(
+                || {
+                    Texture::new(
+                        Some("depth readout texture"),
+                        device,
+                        DepthCopyPipeline::TARGET_FORMAT,
+                        size.width(),
+                        size.height(),
+                        Msaa { samples: 1 },
+                        wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::TEXTURE_BINDING
+                            | wgpu::TextureUsages::COPY_SRC,
+                    )
+                },
+                &(size.width(), size.height()),
+            );
+        } else {
+            state.depth_readout_texture.take();
+        }
+        if state.eye_depth_target.is_some() || settings.depth_readout {
+            depth_copy.reinitialize(
+                || DepthCopyPipeline::new(device, depth_msaa.samples),
+                &depth_msaa.samples,
+            );
         }
 
         state.multisampling_texture.reinitialize(

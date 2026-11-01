@@ -47,7 +47,12 @@ pub fn atmosphere_blend(
         .sky
         .as_ref()
         .map_or(0.0, |sky| sky.atmosphere_blend_at_zoom(zoom));
-    let host_blend = f32::from(u8::from(crate::celestial::lighting(world).atmosphere));
+    let host_blend = f32::from(u8::from(
+        world
+            .resources
+            .get::<crate::render::SceneLighting>()
+            .is_some_and(|l| l.atmosphere),
+    ));
     sky_blend.max(host_blend) * transition
 }
 
@@ -246,10 +251,15 @@ pub fn queue_system(
                 SystemError::Setup
             })?;
             let light = style.light.clone().unwrap_or_default();
+            let scene_lighting = world
+                .resources
+                .get::<crate::render::SceneLighting>()
+                .copied()
+                .unwrap_or_default();
             AtmosphereLayerMetadata::from_view(
                 &camera,
                 &light,
-                crate::celestial::lighting(world),
+                scene_lighting,
                 view_state.zoom().value(),
                 atmosphere_blend,
             )

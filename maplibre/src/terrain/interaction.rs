@@ -8,7 +8,7 @@
 use cgmath::{EuclideanSpace, InnerSpace, Point2, Vector2, Vector3};
 
 use crate::{
-    coords::{Zoom, TILE_SIZE},
+    coords::{LatLon, Zoom, TILE_SIZE},
     projection::{body::Body, globe::camera::GlobeCameraState},
     render::{
         projection::{globe_camera_for_view, mercator_world_to_lat_lon},
@@ -169,7 +169,7 @@ pub fn screen_point_to_terrain_mercator(
             );
             return Some(TerrainHit {
                 mercator,
-                location: crate::terrain::sightline::mercator_to_lat_lon(mercator),
+                location: LatLon::from_mercator(mercator),
                 elevation: sample_at(hit).elevation,
             });
         }

@@ -61,6 +61,7 @@ impl Renderer {
             settings,
             resources: RenderResources::new(surface),
             render_graph: Default::default(),
+            shared_pipelines: None,
         }
     }
 }

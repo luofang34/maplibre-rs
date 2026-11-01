@@ -4,6 +4,7 @@
 
 use crate::{environment::Environment, plugin::Plugin};
 
+#[cfg(feature = "experimental")]
 pub mod daylight;
 pub(crate) mod pattern;
 pub mod queue_system;
@@ -26,7 +27,7 @@ impl<E: Environment> Plugin<E> for BackgroundPlugin {
         schedule: &mut crate::schedule::Schedule,
         _kernel: std::rc::Rc<crate::kernel::Kernel<E>>,
         world: &mut crate::tcs::world::World,
-        graph: &mut crate::render::graph::RenderGraph,
+        _graph: &mut crate::render::graph::RenderGraph,
     ) {
         world.resources.insert(
             crate::render::eventually::Eventually::<
@@ -49,23 +50,29 @@ impl<E: Environment> Plugin<E> for BackgroundPlugin {
             >::Uninitialized,
         );
 
-        world.resources.insert(
-            crate::render::eventually::Eventually::<daylight::GlobeDaylightPipeline>::Uninitialized,
-        );
-        world.resources.init::<daylight::GlobeDaylightGpu>();
+        #[cfg(feature = "experimental")]
+        {
+            world.resources.insert(
+                crate::render::eventually::Eventually::<daylight::GlobeDaylightPipeline>::Uninitialized,
+            );
+            world.resources.init::<daylight::GlobeDaylightGpu>();
+        }
         schedule.add_system_to_stage(
             crate::render::RenderStageLabel::Queue,
             queue_system::queue_system,
         );
-        schedule.add_system_to_stage(
-            crate::render::RenderStageLabel::Queue,
-            daylight::queue_system,
-        );
-        schedule.add_system_to_stage(
-            crate::render::RenderStageLabel::Prepare,
-            daylight::resource_system,
-        );
-        daylight::add_to_graph(graph);
+        #[cfg(feature = "experimental")]
+        {
+            schedule.add_system_to_stage(
+                crate::render::RenderStageLabel::Queue,
+                daylight::queue_system,
+            );
+            schedule.add_system_to_stage(
+                crate::render::RenderStageLabel::Prepare,
+                daylight::resource_system,
+            );
+            daylight::add_to_graph(_graph);
+        }
         schedule.add_system_to_stage(
             crate::render::RenderStageLabel::Prepare,
             crate::background::resource_system::resource_system,

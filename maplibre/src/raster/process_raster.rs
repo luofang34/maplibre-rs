@@ -72,6 +72,16 @@ impl<T: RasterTransferables, C: Context> ProcessRasterContext<T, C> {
 }
 
 impl<T: RasterTransferables, C: Context> ProcessRasterContext<T, C> {
+    /// Delivers an already-decoded RGBA8 image for `(coords, source)`.
+    pub fn finish_decoded(
+        &mut self,
+        coords: &WorldTileCoords,
+        source: RasterSourceId,
+        image_data: RgbaImage,
+    ) -> Result<(), ProcessRasterError> {
+        self.layer_raster_finished(coords, source, image_data)
+    }
+
     fn layer_raster_finished(
         &mut self,
         coords: &WorldTileCoords,

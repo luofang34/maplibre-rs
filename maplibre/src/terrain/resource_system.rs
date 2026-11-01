@@ -70,14 +70,14 @@ pub fn resource_system(
         descriptor.layout = Some(vec![TerrainResources::bind_group_layout_entries()]);
         let pipeline = descriptor
             .initialize_with_prefix_layouts(device, &[projection_resources.bind_group_layout()]);
-        TerrainResources::new(
+        TerrainResources::new_with_mode(
             device,
             queue,
             pipeline,
             surface.surface_format(),
             settings.depth_texture_format,
             msaa,
-            settings.terrain_drape_size,
+            settings.effective_terrain_drape_mode(),
         )
     });
     Ok(())

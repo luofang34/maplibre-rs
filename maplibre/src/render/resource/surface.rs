@@ -102,8 +102,16 @@ impl Surface {
     where
         MW: MapWindow,
     {
-        let size = window.size();
+        Self::from_headless_size(device, adapter, window.size(), settings)
+    }
 
+    /// Allocates a single-sample offscreen target at `size` without a window factory.
+    pub(crate) fn from_headless_size(
+        device: &wgpu::Device,
+        adapter: &wgpu::Adapter,
+        size: PhysicalSize,
+        settings: &RendererSettings,
+    ) -> Self {
         let format = settings
             .texture_format
             .unwrap_or(wgpu::TextureFormat::Rgba8Unorm);

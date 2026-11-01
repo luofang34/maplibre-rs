@@ -27,6 +27,9 @@ pub fn resource_system(
     pool.initialize(|| {
         BufferPool::from_device_with_sizes(&renderer.device, renderer.settings.symbol_pools)
     });
+    if renderer.settings.symbol_pools.is_empty() {
+        return Ok(());
+    }
     pipeline.initialize(|| create_pipeline(renderer, projection));
     let Some((depth, Initialized(pipeline))) = world.resources.query_mut::<(
         &mut Eventually<super::depth::SymbolDepth>,

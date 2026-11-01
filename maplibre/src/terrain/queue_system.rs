@@ -35,7 +35,7 @@ pub(crate) mod edges;
 mod prefetch;
 mod readiness;
 mod targets;
-use targets::target_specs;
+pub(crate) use targets::{procedural_specs, target_specs};
 
 pub(crate) fn uses_uniform_texture_covering(view_state: &ViewState) -> bool {
     use cgmath::InnerSpace;
@@ -46,8 +46,9 @@ pub(crate) fn uses_uniform_texture_covering(view_state: &ViewState) -> bool {
 mod drape_phase;
 pub(crate) mod surface_covering;
 mod uniforms;
-use drape_phase::{background_clear_color, build_drape_phase, drape_metadata};
-use uniforms::{present_ancestors, TerrainEyeFrame};
+use drape_phase::{background_clear_color, encode_drapes};
+pub(crate) use uniforms::TerrainEyeFrame;
+use uniforms::present_ancestors;
 
 /// Divisor of the tile circumference giving the skirt drop, as in GL JS `getSkirtLength`.
 const SKIRT_DIVISOR: f64 = 5.0;
@@ -87,10 +88,26 @@ pub fn queue_system(
         style,
         view_state,
         world,
-        renderer: Renderer { device, queue, .. },
+        renderer:
+            Renderer {
+                device,
+                queue,
+                settings,
+                ..
+            },
         ..
     }: &mut MapContext,
 ) -> SystemResult {
+    let drape_mode = world
+        .resources
+        .get::<crate::render::settings::TerrainDrapeMode>()
+        .copied()
+        .unwrap_or_else(|| settings.effective_terrain_drape_mode());
+    if let Some(Initialized(terrain)) = world.resources.get_mut::<Eventually<TerrainResources>>() {
+        if terrain.drape_mode() != drape_mode {
+            terrain.set_drape_mode(device, drape_mode);
+        }
+    }
     if EyeInFrame::reuses_content(world) {
         return uniforms::replay(world, style, view_state, queue);
     }
@@ -103,23 +120,32 @@ pub fn queue_system(
         world.resources.insert(TerrainFrame::default());
         return Ok(());
     };
-    let specs = target_specs(style, view_state, world)?;
-    let PreparedDrapes {
-        redraw,
-        sources,
-        clear_color,
-    } = prepare_drapes(&specs, style, view_state, world, device)?;
-    let paint_zoom =
-        crate::vector::upload_system::paint::current_zoom(world, view_state.style_zoom().value());
-    let phase = encode_drapes(
-        &specs,
-        &redraw,
-        clear_color,
-        world,
-        crate::coords::Zoom::new(paint_zoom),
-        queue,
-    )?;
-    let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
+    let (phase, surface_specs, surface_sources) = if drape_mode.is_procedural_relief() {
+        let specs = procedural_specs(style, view_state, world)?;
+        let sources = vec![None; specs.len()];
+        (DrapePhase::default(), specs, sources)
+    } else {
+        let specs = target_specs(style, view_state, world)?;
+        let PreparedDrapes {
+            redraw,
+            sources,
+            clear_color,
+        } = prepare_drapes(&specs, style, view_state, world, device)?;
+        let paint_zoom = crate::vector::upload_system::paint::current_zoom(
+            world,
+            view_state.style_zoom().value(),
+        );
+        let phase = encode_drapes(
+            &specs,
+            &redraw,
+            clear_color,
+            world,
+            crate::coords::Zoom::new(paint_zoom),
+            queue,
+        )?;
+        let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
+        (phase, surface_specs, surface_sources)
+    };
     queue_tiles(
         world,
         style,
@@ -241,7 +267,7 @@ fn loaded_content(world: &World) -> LoadedContent<'_> {
 mod tests;
 
 fn acquire_drapes(
-    specs: &[TargetSpec],
+    (specs, extra_retained): (&[TargetSpec], Option<&HashSet<WorldTileCoords>>),
     prints: &[u64],
     ready: &[bool],
     memory: MemoryBudget,
@@ -249,9 +275,13 @@ fn acquire_drapes(
     terrain: &mut TerrainResources,
     device: &wgpu::Device,
 ) -> (Vec<bool>, Vec<Option<WorldTileCoords>>, bool) {
-    let keep = covering::retained_textures(specs.iter().map(|spec| spec.coords), |coords| {
-        terrain.drape_texture(coords).is_some()
-    });
+    let keep = covering::retained_textures(
+        specs
+            .iter()
+            .map(|spec| spec.coords)
+            .chain(extra_retained.into_iter().flatten().copied()),
+        |coords| terrain.drape_texture(coords).is_some(),
+    );
     terrain.retain_drapes(&keep);
     // Unready tiles keep their last valid texture or a background surface.
     if memory.is_tight() {
@@ -461,6 +491,10 @@ fn prepare_drapes(
     } else {
         limit
     };
+    let extra_retained = world
+        .resources
+        .get::<crate::render::eye_covering::SlotResidencyFloor>()
+        .map(|floor| floor.retained_drapes.clone());
     let (redraw, drape_sources, deferred) = {
         let Some(Initialized(terrain)) = world.resources.get_mut::<Eventually<TerrainResources>>()
         else {
@@ -468,7 +502,7 @@ fn prepare_drapes(
         };
         terrain.ensure_scratch(device);
         acquire_drapes(
-            specs,
+            (specs, extra_retained.as_ref()),
             &prints,
             &ready,
             memory,
@@ -490,45 +524,4 @@ fn prepare_drapes(
         sources: drape_sources,
         clear_color,
     })
-}
-
-fn encode_drapes(
-    specs: &[TargetSpec],
-    redraw: &[bool],
-    clear_color: wgpu::Color,
-    world: &mut World,
-    zoom: crate::coords::Zoom,
-    queue: &crate::render::upload_queue::UploadQueue,
-) -> Result<DrapePhase, SystemError> {
-    let capacity = match world.resources.get::<Eventually<WgpuTileViewPattern>>() {
-        Some(Initialized(pattern)) => pattern.remaining_metadata_capacity(),
-        _ => return Err(SystemError::Dependencies),
-    };
-
-    let drape_size = match world.resources.get::<Eventually<TerrainResources>>() {
-        Some(Initialized(terrain)) => terrain.drape_size(),
-        _ => return Err(SystemError::Dependencies),
-    };
-    let (metadata, slots) = drape_metadata(specs, redraw, capacity, zoom, drape_size);
-    let ranges = {
-        let Some(Initialized(pattern)) =
-            world.resources.get_mut::<Eventually<WgpuTileViewPattern>>()
-        else {
-            return Err(SystemError::Dependencies);
-        };
-        pattern
-            .upload_extra_metadata(queue, &metadata)
-            .map_err(|error| {
-                tracing::error!(%error, "unable to upload drape metadata");
-                SystemError::Setup
-            })?
-    };
-    Ok(build_drape_phase(
-        specs,
-        redraw,
-        &slots,
-        &ranges,
-        zoom,
-        clear_color,
-    ))
 }

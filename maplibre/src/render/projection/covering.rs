@@ -330,18 +330,22 @@ fn globe_view_region(
         max_meters: elevation_for_tile_culling(&camera, view_state.center_elevation()),
     };
     let elevation = tile_elevation(style, world, fallback);
-    // A free-globe pose stands where it is, often near the ground and level. A host's eye
-    // replaces the pose, as `globe_camera_for_view` draws it.
-    let pose = view_state.pose_view().is_some() && !view_state.has_external_view();
+    // Both free-globe poses and host-supplied external views stand where the eye is placed,
+    // often near the ground and looking toward the horizon or distant mountains.
+    let pose = view_state.pose_view().is_some() || view_state.has_external_view();
     let reach = if pose && request.surface {
-        (
-            LodContext::screen_resolution(
+        let level_offset = request.requested_zoom - view_state.zoom().value();
+        let lod = if let Some(focal) = view_state.external_lod_focal_pixels() {
+            LodContext::screen_resolution_focal(
                 &camera,
-                view_state.height(),
-                request.requested_zoom - view_state.zoom().value(),
-            ),
-            FarPlane::HighestGround,
-        )
+                focal,
+                level_offset,
+                nadir_ground_elevation(style, world, &camera),
+            )
+        } else {
+            LodContext::screen_resolution(&camera, view_state.height(), level_offset)
+        };
+        (lod, FarPlane::HighestGround)
     } else {
         (
             LodContext::new(&camera, request.requested_zoom),
@@ -395,6 +399,26 @@ fn tile_elevation<'a>(
         }
         _ => Box::new(fallback),
     }
+}
+
+fn nadir_ground_elevation(
+    style: &Style,
+    world: &World,
+    camera: &crate::projection::globe::camera::GlobeCameraState,
+) -> f64 {
+    let Some(index) = world
+        .resources
+        .get::<TerrainCoverageIndex>()
+        .filter(|_| style.terrain.is_some())
+    else {
+        return 0.0;
+    };
+    let nadir = crate::projection::globe::unit_sphere_to_lat_lon(camera.camera_position());
+    let x = nadir.longitude / 360.0 + 0.5;
+    let y = (1.0 - nadir.latitude.to_radians().tan().asinh() / std::f64::consts::PI) * 0.5;
+    index
+        .loaded_ground_cached(&world.tiles, x, y, crate::terrain::coverage::DemDetail::Finest)
+        .unwrap_or(0.0)
 }
 
 /// Selects Mercator tiles: the ground-plane bounding box for flat views, or frustum culling

@@ -7,36 +7,51 @@ impl<V: Pod, I: Pod, TM: Pod, FM: Pod>
     }
 
     /// A pool whose buffers hold `sizes` elements, each clipped to the device's largest buffer.
-    /// Too small a pool has tiles unloaded and reloaded from frame to frame.
+    ///
+    /// Zero-element capacities allocate minimal (`<= 256` B) dummy GPU buffers while keeping
+    /// logical ring capacity at `0`, avoiding WebGPU/Metal zero-sized buffer validation errors.
     pub fn from_device_with_sizes(device: &wgpu::Device, sizes: BufferPoolSizes) -> Self {
         let largest = device.limits().max_buffer_size;
         let fitting = |element: usize, count: wgpu::BufferAddress| {
-            fitting_buffer_size(element, count, largest)
+            let logical = fitting_buffer_size(element, count, largest);
+            let physical = if logical == 0 {
+                (element as wgpu::BufferAddress)
+                    .max(16)
+                    .next_multiple_of(16)
+            } else {
+                logical
+            };
+            (logical, physical)
         };
+        let (vertex_logical, vertex_physical) = fitting(size_of::<V>(), sizes.vertices);
         let vertex_buffer_desc = wgpu::BufferDescriptor {
             label: Some("vertex buffer"),
-            size: fitting(size_of::<V>(), sizes.vertices),
+            size: vertex_physical,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
 
+        let (indices_logical, indices_physical) = fitting(size_of::<I>(), sizes.indices);
         let indices_buffer_desc = wgpu::BufferDescriptor {
             label: Some("indices buffer"),
-            size: fitting(size_of::<I>(), sizes.indices),
+            size: indices_physical,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
 
+        let (feature_logical, feature_physical) =
+            fitting(size_of::<FM>(), sizes.feature_metadata);
         let feature_metadata_desc = wgpu::BufferDescriptor {
             label: Some("feature metadata buffer"),
-            size: fitting(size_of::<FM>(), sizes.feature_metadata),
+            size: feature_physical,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
 
+        let (layer_logical, layer_physical) = fitting(size_of::<TM>(), sizes.layer_metadata);
         let layer_metadata_desc = wgpu::BufferDescriptor {
             label: Some("layer metadata buffer"),
-            size: fitting(size_of::<TM>(), sizes.layer_metadata),
+            size: layer_physical,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
@@ -44,21 +59,29 @@ impl<V: Pod, I: Pod, TM: Pod, FM: Pod>
         BufferPool::new(
             BackingBufferDescriptor::new(
                 device.create_buffer(&vertex_buffer_desc),
-                vertex_buffer_desc.size,
+                vertex_logical,
             ),
             BackingBufferDescriptor::new(
                 device.create_buffer(&indices_buffer_desc),
-                indices_buffer_desc.size,
+                indices_logical,
             ),
             BackingBufferDescriptor::new(
                 device.create_buffer(&layer_metadata_desc),
-                layer_metadata_desc.size,
+                layer_logical,
             ),
             BackingBufferDescriptor::new(
                 device.create_buffer(&feature_metadata_desc),
-                feature_metadata_desc.size,
+                feature_logical,
             ),
         )
+    }
+
+    /// Total GPU buffer bytes physically allocated on the device for this pool.
+    pub fn device_buffer_bytes(&self) -> wgpu::BufferAddress {
+        self.vertices.inner.size()
+            + self.indices.inner.size()
+            + self.layer_metadata.inner.size()
+            + self.feature_metadata.inner.size()
     }
 }
 

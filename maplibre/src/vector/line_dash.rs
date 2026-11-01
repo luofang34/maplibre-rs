@@ -51,9 +51,8 @@ impl LineDashResources {
         device: &wgpu::Device,
         queue: &crate::render::upload_queue::UploadQueue,
     ) -> Self {
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("line dash layout"),
-            entries: &[
+        let layout = crate::render::resource::create_bind_group_layout_cached(
+            device, Some("line dash layout"), &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -97,7 +96,7 @@ impl LineDashResources {
                     count: None,
                 },
             ],
-        });
+        );
         let solid = create_entry(
             device,
             queue,

@@ -40,21 +40,25 @@ pub(super) use web::create_kernel;
 pub use web::HeadlessEnvironment;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) fn create_kernel(
+pub(crate) fn create_kernel(
     size: crate::window::PhysicalSize,
     cache_path: Option<String>,
     loader: Option<crate::io::resource_loader::SharedLoader>,
+    asset_cache: Option<crate::sdf::assets::AssetCache>,
 ) -> Result<crate::kernel::Kernel<HeadlessEnvironment>, crate::kernel::KernelBuildError> {
     let loader = loader.unwrap_or_else(|| {
         crate::io::resource_loader::SharedLoader::new(ReqwestHttpClient::new(cache_path.clone()))
     });
+    let asset_cache = asset_cache.unwrap_or_default();
     crate::kernel::KernelBuilder::new()
         .with_map_window_config(HeadlessMapWindowConfig::new(size))
         .with_http_client(loader.clone())
+        .with_asset_cache(asset_cache.clone())
         .with_apc(SchedulerAsyncProcedureCall::new(
             TokioScheduler::new(),
             crate::environment::OffscreenKernelConfig {
                 cache_directory: cache_path,
+                asset_cache,
                 loader: Some(loader),
                 ..Default::default()
             },

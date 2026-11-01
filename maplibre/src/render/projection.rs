@@ -111,9 +111,10 @@ pub struct ProjectionGpuResources {
 impl ProjectionGpuResources {
     /// Allocates the projection uniform and its stable bind-group layout.
     pub fn new(device: &wgpu::Device, queue: &crate::render::upload_queue::UploadQueue) -> Self {
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("projection uniform layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
+        let bind_group_layout = crate::render::resource::create_bind_group_layout_cached(
+            device,
+            Some("projection uniform layout"),
+            &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
@@ -125,7 +126,7 @@ impl ProjectionGpuResources {
                 },
                 count: None,
             }],
-        });
+        );
         let initial_data = ShaderProjectionData::default();
         let buffer = queue.create_buffer_init(
             device,
@@ -313,7 +314,7 @@ const PRECISE_GLOBE_ZOOM: f64 = 12.0;
 /// a close view of the globe draws as geometry that slides; relative to this centre they keep
 /// their separation.
 fn globe_center_references(globe: &GlobeCameraState) -> Option<[[f32; 4]; 3]> {
-    let center = crate::terrain::sightline::lat_lon_to_mercator(globe.center());
+    let center = globe.center().to_mercator();
     // The centre need only be near the view; one f32 can hold exactly is differenced exactly.
     let (x_f32, y_f32) = (center.x as f32, center.y as f32);
     let (x, y) = (f64::from(x_f32), f64::from(y_f32));

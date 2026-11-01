@@ -22,6 +22,7 @@ pub mod euclid {
     pub use lyon::geom::euclid::*;
 }
 
+#[cfg(feature = "experimental")]
 pub mod celestial;
 pub mod context;
 pub mod coords;
@@ -53,10 +54,12 @@ pub mod debug;
 pub mod geojson;
 pub mod heatmap;
 pub mod hillshade;
+#[cfg(feature = "experimental")]
 pub mod overlay;
 pub mod raster;
 pub mod vector;
 
 pub mod sdf;
+#[cfg(feature = "experimental")]
 pub mod starfield;
 pub mod terrain;

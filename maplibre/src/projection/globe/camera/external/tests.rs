@@ -118,9 +118,10 @@ fn an_eye_beside_the_globe_faces_its_own_horizon() {
 }
 
 #[test]
-fn an_eye_at_or_below_the_surface_is_refused() {
+fn an_eye_at_or_below_the_lowest_ground_is_refused() {
     let native = GlobeCameraState::new(posed_options()).expect("valid options");
-    for length in [1.0, 0.5, 0.0] {
+    let lowest = Body::EARTH.unit_radius_at(Body::EARTH.lowest_ground_meters);
+    for length in [lowest, 0.5, 0.0] {
         let eye = ExternalGlobeEye {
             position: Vector3::new(0.0, 0.0, length),
             ..eye_of(&native)
@@ -129,6 +130,23 @@ fn an_eye_at_or_below_the_surface_is_refused() {
             Err(GlobeCameraError::EyeBelowSurface { distance }) => assert_eq!(distance, length),
             other => panic!("expected a refusal, got {other:?}"),
         }
+    }
+}
+
+#[test]
+fn an_eye_below_sea_level_above_lowest_ground_builds_a_valid_horizon() {
+    let native = GlobeCameraState::new(posed_options()).expect("valid options");
+    for altitude_meters in [0.0, -3.0, -85.5, -430.0] {
+        let length = Body::EARTH.unit_radius_at(altitude_meters);
+        let eye = ExternalGlobeEye {
+            position: Vector3::new(0.0, 0.0, length),
+            ..eye_of(&native)
+        };
+        let camera = GlobeCameraState::from_external_eye(posed_options(), eye)
+            .unwrap_or_else(|err| panic!("altitude {altitude_meters} m should succeed: {err:?}"));
+        let plane = camera.clipping_plane();
+        assert!(plane.dot(eye.position.extend(1.0)) > 0.0);
+        assert!(plane.dot(Vector3::new(0.0, 0.0, -1.0).extend(1.0)) < 0.0);
     }
 }
 

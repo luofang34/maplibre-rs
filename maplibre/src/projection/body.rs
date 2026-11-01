@@ -10,6 +10,9 @@ pub struct Body {
     /// Height in metres of the body's highest ground above the mean radius: where no
     /// elevation data has loaded, ground anywhere below it may hide what lies beyond.
     pub highest_ground_meters: f64,
+    /// Height in metres of the body's lowest ground relative to the mean radius (negative for
+    /// sub-sea-level basins such as the Dead Sea or Death Valley).
+    pub lowest_ground_meters: f64,
 }
 
 impl Body {
@@ -17,6 +20,7 @@ impl Body {
     pub const EARTH: Self = Self {
         radius_meters: 6_371_008.8,
         highest_ground_meters: 8_849.0,
+        lowest_ground_meters: -450.0,
     };
 
     /// Metres around the equator, the length one Mercator unit covers there.
