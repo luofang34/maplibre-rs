@@ -43,8 +43,6 @@ mod injected_loader;
 mod labels;
 pub mod multi_view;
 pub use error::HeadlessMapOperationError;
-#[cfg(feature = "experimental")]
-mod experimental;
 mod processed;
 mod provided_images;
 mod raster;
@@ -59,7 +57,7 @@ mod targets;
 #[cfg(test)]
 mod terrain_coverage;
 mod terrain_patch;
-#[cfg(all(test, feature = "experimental"))]
+#[cfg(test)]
 mod vertical_perspective;
 mod xr;
 

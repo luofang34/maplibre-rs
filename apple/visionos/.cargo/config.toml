@@ -1,5 +1,0 @@
-[build]
-target = "aarch64-apple-visionos-sim"
-
-[unstable]
-build-std = ["std", "panic_abort"]

@@ -6,8 +6,6 @@ use crate::{environment::Environment, plugin::Plugin};
 
 pub mod altitude;
 pub mod buffers;
-#[cfg(feature = "experimental")]
-pub mod daylight;
 pub(crate) mod pattern;
 pub mod queue_system;
 pub mod render_commands;
@@ -53,29 +51,10 @@ impl<E: Environment> Plugin<E> for BackgroundPlugin {
         );
         world.resources.init::<buffers::BackgroundGpuBuffers>();
 
-        #[cfg(feature = "experimental")]
-        {
-            world.resources.insert(
-                crate::render::eventually::Eventually::<daylight::GlobeDaylightPipeline>::Uninitialized,
-            );
-            world.resources.init::<daylight::GlobeDaylightGpu>();
-        }
         schedule.add_system_to_stage(
             crate::render::RenderStageLabel::Queue,
             queue_system::queue_system,
         );
-        #[cfg(feature = "experimental")]
-        {
-            schedule.add_system_to_stage(
-                crate::render::RenderStageLabel::Queue,
-                daylight::queue_system,
-            );
-            schedule.add_system_to_stage(
-                crate::render::RenderStageLabel::Prepare,
-                daylight::resource_system,
-            );
-            daylight::add_to_graph(_graph);
-        }
         schedule.add_system_to_stage(
             crate::render::RenderStageLabel::Prepare,
             crate::background::resource_system::resource_system,

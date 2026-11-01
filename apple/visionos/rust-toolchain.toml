@@ -1,4 +1,0 @@
-# visionOS is a tier 3 target: the standard library is built from source with build-std.
-[toolchain]
-channel = "nightly"
-components = ["rust-src"]

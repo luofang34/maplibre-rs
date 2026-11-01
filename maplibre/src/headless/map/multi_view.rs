@@ -34,11 +34,6 @@ use crate::{
     tcs::world::World,
     window::PhysicalSize,
 };
-#[cfg(feature = "experimental")]
-use crate::{
-    overlay::{DepthProbe, HostOverlay, OverlayGpu, OverlayMesh, ProbeGpu, ProbeResults},
-    starfield::sun::depth::SunDepth,
-};
 
 /// Attachment configuration for a registered [`ViewSlotId`].
 #[derive(Clone, Copy, Debug)]
@@ -166,14 +161,6 @@ struct SlotState {
     depth_readout_texture: Eventually<Texture>,
     multisampling_texture: Eventually<Option<Texture>>,
     symbol_depth: Eventually<SymbolDepth>,
-    #[cfg(feature = "experimental")]
-    sun_depth: Eventually<SunDepth>,
-    #[cfg(feature = "experimental")]
-    overlay: HostOverlay,
-    #[cfg(feature = "experimental")]
-    overlay_gpu: Eventually<OverlayGpu>,
-    #[cfg(feature = "experimental")]
-    probe_gpu: Eventually<ProbeGpu>,
     lod_history: FrameLodHistory,
     stereo_snapshot: Option<StereoSnapshot>,
     last_retained_tiles: HashSet<WorldTileCoords>,
@@ -212,22 +199,6 @@ fn swap_slot_resources(slot: &mut SlotState, renderer: &mut Renderer, world: &mu
     if let Some(symbol_depth) = world.resources.get_mut::<Eventually<SymbolDepth>>() {
         std::mem::swap(&mut slot.symbol_depth, symbol_depth);
     }
-    #[cfg(feature = "experimental")]
-    if let Some(sun_depth) = world.resources.get_mut::<Eventually<SunDepth>>() {
-        std::mem::swap(&mut slot.sun_depth, sun_depth);
-    }
-    #[cfg(feature = "experimental")]
-    if let Some(overlay) = world.resources.get_mut::<HostOverlay>() {
-        std::mem::swap(&mut slot.overlay, overlay);
-    }
-    #[cfg(feature = "experimental")]
-    if let Some(overlay_gpu) = world.resources.get_mut::<Eventually<OverlayGpu>>() {
-        std::mem::swap(&mut slot.overlay_gpu, overlay_gpu);
-    }
-    #[cfg(feature = "experimental")]
-    if let Some(probe_gpu) = world.resources.get_mut::<Eventually<ProbeGpu>>() {
-        std::mem::swap(&mut slot.probe_gpu, probe_gpu);
-    }
 }
 
 impl HeadlessMap {
@@ -256,14 +227,6 @@ impl HeadlessMap {
                 depth_readout_texture: Eventually::Uninitialized,
                 multisampling_texture: Eventually::Uninitialized,
                 symbol_depth: Eventually::Uninitialized,
-                #[cfg(feature = "experimental")]
-                sun_depth: Eventually::Uninitialized,
-                #[cfg(feature = "experimental")]
-                overlay: HostOverlay::default(),
-                #[cfg(feature = "experimental")]
-                overlay_gpu: Eventually::Uninitialized,
-                #[cfg(feature = "experimental")]
-                probe_gpu: Eventually::Uninitialized,
                 lod_history: FrameLodHistory::default(),
                 stereo_snapshot: None,
                 last_retained_tiles: HashSet::new(),
@@ -308,35 +271,8 @@ impl HeadlessMap {
             .is_some_and(|registry| registry.slots.remove(&slot).is_some())
     }
 
-    /// Replaces the host [`OverlayMesh`] drawn inside `slot` (`OverlayPlugin` required).
-    #[cfg(feature = "experimental")]
-    pub fn set_view_slot_overlay(
-        &mut self,
-        slot: ViewSlotId,
-        mesh: OverlayMesh,
-    ) -> Result<(), MultiViewError> {
-        self.slot_mut(slot)?.overlay.set(mesh);
-        Ok(())
-    }
 
-    /// Submits [`DepthProbe`]s to be tested against `slot`'s depth buffer (`OverlayPlugin` required).
-    #[cfg(feature = "experimental")]
-    pub fn set_view_slot_depth_probes(
-        &mut self,
-        slot: ViewSlotId,
-        probes: Vec<DepthProbe>,
-    ) -> Result<u64, MultiViewError> {
-        Ok(self.slot_mut(slot)?.overlay.set_probes(probes))
-    }
 
-    /// Takes the latest completed [`ProbeResults`] for `slot`, if ready.
-    #[cfg(feature = "experimental")]
-    pub fn take_view_slot_depth_probe_results(
-        &mut self,
-        slot: ViewSlotId,
-    ) -> Result<Option<ProbeResults>, MultiViewError> {
-        Ok(self.slot_mut(slot)?.overlay.take_answers())
-    }
 
     /// Borrows `slot`'s resolved single-sample color [`wgpu::Texture`].
     pub fn view_slot_color_texture(&self, slot: ViewSlotId) -> Option<&wgpu::Texture> {
@@ -399,7 +335,7 @@ impl HeadlessMap {
     }
 }
 
-#[cfg(all(test, feature = "experimental"))]
+#[cfg(test)]
 mod shared_assets_tests;
-#[cfg(all(test, feature = "experimental"))]
+#[cfg(test)]
 mod tests;

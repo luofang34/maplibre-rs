@@ -100,8 +100,6 @@ pub struct Map<E: Environment> {
 
     plugins: Vec<Box<dyn Plugin<E>>>,
     max_pitch: cgmath::Deg<f64>,
-    #[cfg(feature = "experimental")]
-    sun: Option<crate::celestial::EcefDirection>,
 }
 
 impl<E: Environment> Map<E>
@@ -135,8 +133,6 @@ where
             window,
             plugins,
             max_pitch: DEFAULT_MAX_PITCH,
-            #[cfg(feature = "experimental")]
-            sun: None,
         };
         Ok(map)
     }
@@ -151,15 +147,6 @@ where
     /// Sets the largest pitch the camera accepts, in degrees.
     pub fn set_max_pitch_degrees(&mut self, degrees: f64) {
         self.set_max_pitch(cgmath::Deg(degrees));
-    }
-
-    /// Sets the direction towards the sun, as [`MapContext::set_sun_direction`].
-    #[cfg(feature = "experimental")]
-    pub fn set_sun_direction(&mut self, sun: Option<crate::celestial::EcefDirection>) {
-        self.sun = sun;
-        if let CurrentMapContext::Ready(context) = &mut self.map_context {
-            context.set_sun_direction(sun);
-        }
     }
 
     /// Moves the map at once to the center, zoom and angles given, keeping the others, as GL
@@ -212,8 +199,6 @@ where
                 let mut world = World::default();
                 world.resources.insert(self.request_attempts.clone());
                 crate::sdf::provided::set_pixel_ratio(&mut world, self.window.scale_factor());
-                #[cfg(feature = "experimental")]
-                crate::celestial::set_sun_direction(&mut world, self.sun);
 
                 for plugin in &self.plugins {
                     plugin.build(
