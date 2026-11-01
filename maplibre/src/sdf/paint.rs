@@ -1,10 +1,7 @@
 //! Uniform values for readable text and sprite rendering.
 use bytemuck_derive::{Pod, Zeroable};
 
-use crate::style::{
-    expression::FeatureProperties,
-    layer::{StyleProperty, SymbolPaint},
-};
+use crate::style::{expression::FeatureProperties, layer::SymbolPaint};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
@@ -94,8 +91,22 @@ impl SymbolUniforms {
         properties: &FeatureProperties,
         zoom: f64,
     ) -> Self {
-        self.text[0] = feature_style(paint, "text", properties, zoom)[2][0];
-        self.icon[0] = feature_style(paint, "icon", properties, zoom)[2][0];
+        let text_data_driven = paint
+            .text_size
+            .as_ref()
+            .is_some_and(|s| !s.is_feature_constant());
+        let icon_data_driven = paint
+            .compiled_property::<f32>("icon-size")
+            .is_some_and(|s| !s.is_feature_constant());
+        if !text_data_driven && !icon_data_driven {
+            return self;
+        }
+        if text_data_driven {
+            self.text[0] = feature_style(paint, "text", properties, zoom)[2][0];
+        }
+        if icon_data_driven {
+            self.icon[0] = feature_style(paint, "icon", properties, zoom)[2][0];
+        }
         self
     }
 }
@@ -109,26 +120,42 @@ pub(crate) fn feature_style(
     zoom: f64,
 ) -> [[f32; 4]; 3] {
     let color = |name: &str, fallback: [f32; 4]| {
-        paint
-            .properties
-            .get(&format!("{prefix}-{name}"))
-            .and_then(|value| {
-                StyleProperty::<csscolorparser::Color>::parse(value).evaluate_for(properties, zoom)
-            })
-            .map_or(fallback, |color| {
+        let full_name = format!("{prefix}-{name}");
+        if let Some(prop) = paint.compiled_property::<csscolorparser::Color>(&full_name) {
+            let res = if prop.is_feature_constant() {
+                prop.evaluate_at_zoom(zoom)
+            } else {
+                prop.evaluate_for(properties, zoom)
+            };
+            return res.map_or(fallback, |color| {
                 let [r, g, b, a] = color.to_array();
                 [r as f32, g as f32, b as f32, a as f32]
-            })
+            });
+        }
+        fallback
     };
     let number = |name: &str, fallback: f32| {
-        paint.number(&format!("{prefix}-{name}"), properties, zoom, fallback)
+        let full_name = format!("{prefix}-{name}");
+        if let Some(prop) = paint.compiled_property::<f32>(&full_name) {
+            let res = if prop.is_feature_constant() {
+                prop.evaluate_at_zoom(zoom)
+            } else {
+                prop.evaluate_for(properties, zoom)
+            };
+            return res.filter(|value| value.is_finite()).unwrap_or(fallback);
+        }
+        fallback
     };
     let size = if prefix == "text" {
-        paint
-            .text_size
-            .as_ref()
-            .and_then(|value| value.evaluate_for(properties, zoom))
-            .unwrap_or(16.0)
+        if let Some(prop) = &paint.text_size {
+            if prop.is_feature_constant() {
+                prop.evaluate_at_zoom(zoom).unwrap_or(16.0)
+            } else {
+                prop.evaluate_for(properties, zoom).unwrap_or(16.0)
+            }
+        } else {
+            16.0
+        }
     } else {
         number("size", 1.0)
     };
@@ -145,9 +172,10 @@ pub(crate) fn feature_style(
 }
 
 fn color(paint: &SymbolPaint, name: &str, zoom: f64, fallback: [f32; 4]) -> [f32; 4] {
-    let Some(color) = paint.properties.get(name).and_then(|value| {
-        StyleProperty::<csscolorparser::Color>::parse(value).evaluate_at_zoom(zoom)
-    }) else {
+    let Some(color) = paint
+        .compiled_property::<csscolorparser::Color>(name)
+        .and_then(|prop| prop.evaluate_at_zoom(zoom))
+    else {
         return fallback;
     };
     let [r, g, b, a] = color.to_array();

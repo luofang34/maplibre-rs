@@ -31,10 +31,11 @@ pub const DRAPE_SIZE: u32 = 2048;
 /// Smallest drape edge accepted; below it the ground is too coarse to read.
 pub const MIN_DRAPE_SIZE: u32 = 256;
 /// Byte stride between per-tile uniform blocks, the WebGPU dynamic offset alignment.
-pub const UNIFORM_STRIDE: u64 = 2560;
+pub const UNIFORM_STRIDE: u64 = 512;
 // A block that outgrows its stride would overwrite the next tile's; the stride is a
 // multiple of the 256-byte offset alignment every backend accepts.
 const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() as u64 <= UNIFORM_STRIDE);
+const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() == 512);
 /// Largest number of terrain tiles drawn in one frame.
 const UNIFORM_CAPACITY: u64 = 1024;
 
@@ -89,7 +90,8 @@ pub struct TerrainTileUniforms {
     pub procedural_relief: [f32; 4],
     /// Procedural DEM grid & TAWS controls: `[grid_spacing_m, grid_opacity, taws_enabled, tile_span_m]`.
     pub procedural_grid: [f32; 4],
-    pub(crate) edge_heights: super::queue_system::edges::EdgeHeights,
+    /// Index into the per-frame edge storage buffer in `edge_index[0]`.
+    pub edge_index: [f32; 4],
 }
 
 /// The fog of a frame, shared by every terrain tile, as GL JS `terrainUniformValues` takes it.
@@ -150,6 +152,7 @@ pub struct TerrainResources {
     /// frame is a hundred a frame, and on Metal the memory behind them is returned only
     /// slowly, so the footprint climbs for as long as the map is looked at.
     bind_groups: HashMap<(wgpu::Texture, wgpu::Texture), Arc<wgpu::BindGroup>>,
+    edge_buffer: wgpu::Buffer,
     msaa: Msaa,
     color_format: wgpu::TextureFormat,
     depth_format: wgpu::TextureFormat,
@@ -158,49 +161,6 @@ pub struct TerrainResources {
 }
 
 impl TerrainResources {
-    /// Bind group layout of group one: uniforms, DEM texture, drape texture, sampler.
-    pub fn bind_group_layout_entries() -> Vec<wgpu::BindGroupLayoutEntry> {
-        vec![
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: true,
-                    min_binding_size: NonZeroU64::new(
-                        std::mem::size_of::<TerrainTileUniforms>() as u64
-                    ),
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Texture {
-                    multisampled: false,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    multisampled: false,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 3,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
-        ]
-    }
 
     /// Creates the shared mesh, sampler and uniform storage for an initialized pipeline.
     pub fn new(
@@ -273,6 +233,13 @@ impl TerrainResources {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let edge_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("terrain edge storage"),
+            size: (std::mem::size_of::<super::queue_system::edges::EdgeHeights>() as u64)
+                * UNIFORM_CAPACITY,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -309,6 +276,7 @@ impl TerrainResources {
             drape_scratch: None,
             draws: Vec::new(),
             bind_groups: HashMap::new(),
+            edge_buffer,
             msaa,
             color_format,
             depth_format,
@@ -449,6 +417,20 @@ impl TerrainResources {
         }
         queue.write_buffer(&self.uniform_buffer, 0, &bytes);
         count
+    }
+
+    /// Writes the per-tile edge height blocks.
+    pub(crate) fn write_edges(
+        &self,
+        queue: &crate::render::upload_queue::UploadQueue,
+        edges: &[super::queue_system::edges::EdgeHeights],
+    ) {
+        let count = edges.len().min(UNIFORM_CAPACITY as usize);
+        if count == 0 {
+            return;
+        }
+        let bytes = bytemuck::cast_slice(&edges[..count]);
+        queue.write_buffer(&self.edge_buffer, 0, bytes);
     }
 
     /// Replaces this frame's terrain draws.

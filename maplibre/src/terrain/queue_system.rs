@@ -383,13 +383,12 @@ fn queue_tiles(
         else {
             return Err(SystemError::Dependencies);
         };
-        let uniforms::PreparedTerrain {
-            mut uniforms,
-            sources,
-        } = uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
-        edge_cache.apply(&sources, &mut uniforms, &world.tiles);
+        let uniforms::PreparedTerrain { mut uniforms, sources } =
+            uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
+        let edges = edge_cache.apply(&sources, &mut uniforms, &world.tiles);
         let (sources, placed) =
             uniforms::with_world_copies(&mut uniforms, sources, copies.as_ref(), view_state);
+        terrain.write_edges(queue, &edges);
         let written = terrain.write_uniforms(queue, &uniforms);
         tracing::debug!(
             targets = targets.0.len(),

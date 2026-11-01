@@ -77,7 +77,7 @@ impl EdgeCache {
         )],
         uniforms: &mut [TerrainTileUniforms],
         tiles: &Tiles,
-    ) {
+    ) -> Vec<EdgeHeights> {
         let mut signature: Vec<_> = sources
             .iter()
             .map(|(source, tile, _)| {
@@ -93,11 +93,13 @@ impl EdgeCache {
         if signature != self.signature {
             self.update(signature, tiles);
         }
-        for ((_, tile, _), uniform) in sources.iter().zip(uniforms) {
-            if let Some(edges) = self.samples.get(tile) {
-                uniform.edge_heights = *edges;
-            }
+        let mut edges = Vec::with_capacity(sources.len());
+        for (index, ((_, tile, _), uniform)) in sources.iter().zip(uniforms.iter_mut()).enumerate() {
+            let edge = self.samples.get(tile).copied().unwrap_or_default();
+            uniform.edge_index = [index as f32, 0.0, 0.0, 0.0];
+            edges.push(edge);
         }
+        edges
     }
 }
 

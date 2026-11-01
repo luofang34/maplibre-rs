@@ -1,11 +1,25 @@
 //! Evaluated symbol layout and paint shared by glyph preparation and rendering.
+
+pub(crate) mod compiled_cache;
+pub use compiled_cache::CompiledProperties;
+
 use crate::style::{
     expression::FeatureProperties,
-    layer::{StyleProperty, SymbolPaint, TextField},
+    layer::{SymbolPaint, TextField},
+    property::{CompiledProperty, PropertyValue},
 };
 
 impl SymbolPaint {
-    /// Evaluates a numeric symbol property.
+    /// Returns the compiled property `name` if defined, parsing and caching it on demand.
+    pub fn compiled_property<T>(&self, name: &str) -> Option<CompiledProperty<T>>
+    where
+        T: PropertyValue + Send + Sync + 'static,
+    {
+        let source = self.properties.get(name)?;
+        self.compiled.get(name, source)
+    }
+
+    /// Evaluates a numeric symbol property using pre-compiled expression.
     pub fn number(
         &self,
         name: &str,
@@ -13,22 +27,19 @@ impl SymbolPaint {
         zoom: f64,
         fallback: f32,
     ) -> f32 {
-        self.properties
-            .get(name)
-            .and_then(|value| StyleProperty::<f32>::parse(value).evaluate_for(properties, zoom))
+        self.compiled_property::<f32>(name)
+            .and_then(|prop| prop.evaluate_for(properties, zoom))
             .filter(|value| value.is_finite())
             .unwrap_or(fallback)
     }
 
-    /// Evaluates a string or token template property.
+    /// Evaluates a string or token template property using pre-compiled expression.
     pub fn text(&self, name: &str, properties: &FeatureProperties, zoom: f64) -> Option<String> {
         if name == "text-field" {
             return self.field(properties, zoom, None).map(|field| field.0);
         }
-        self.properties
-            .get(name)
-            .map(StyleProperty::<TextField>::parse)
-            .and_then(|value| value.evaluate_for(properties, zoom))
+        self.compiled_property::<TextField>(name)
+            .and_then(|prop| prop.evaluate_for(properties, zoom))
             .map(|text| text.0)
     }
 
@@ -58,15 +69,22 @@ impl SymbolPaint {
         zoom: f64,
         images: &dyn crate::style::expression::ImageSet,
     ) -> Option<String> {
-        let property = self
-            .properties
-            .get(name)
-            .map(StyleProperty::<crate::style::layer::ImageName>::parse)?;
+        let property = self.compiled_property::<crate::style::layer::ImageName>(name)?;
         let context = crate::style::expression::EvaluationContext {
             available_images: Some(images),
             ..crate::style::expression::EvaluationContext::for_feature(zoom, properties)
         };
-        property.evaluate(&context).map(|text| text.0)
+        match property {
+            CompiledProperty::Constant(name) => Some(name.0),
+            CompiledProperty::CameraFunction(curve) => {
+                let val = curve.expression().evaluate(&context).ok()?;
+                crate::style::layer::ImageName::from_value(&val).map(|name| name.0)
+            }
+            CompiledProperty::DataDriven(expr) | CompiledProperty::Composite(expr) => {
+                let val = expr.evaluate(&context).ok()?;
+                crate::style::layer::ImageName::from_value(&val).map(|name| name.0)
+            }
+        }
     }
 
     /// Whether shared symbol height is evaluated during placement rather than tile layout.

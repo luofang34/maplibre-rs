@@ -94,11 +94,12 @@ fn replacing_a_dem_refreshes_cached_mesh_edges() {
     let sources = [(Some(coords), coords, None)];
     let mut uniforms = [TerrainTileUniforms::zeroed()];
     let mut cache = EdgeCache::default();
-    cache.apply(&sources, &mut uniforms, &tiles);
-    let initial = uniforms[0].edge_heights.samples;
+    let edges1 = cache.apply(&sources, &mut uniforms, &tiles);
+    let initial = edges1[0].samples;
     load(&mut tiles, coords, 2000);
-    cache.apply(&sources, &mut uniforms, &tiles);
-    for (before, after) in initial.iter().zip(uniforms[0].edge_heights.samples) {
+    let edges2 = cache.apply(&sources, &mut uniforms, &tiles);
+    assert_eq!(uniforms[0].edge_index[0], 0.0);
+    for (before, after) in initial.iter().zip(edges2[0].samples) {
         for (before, after) in before.iter().zip(after) {
             assert!((after - before - 1000.0).abs() < 0.001);
         }

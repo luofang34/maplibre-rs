@@ -358,4 +358,7 @@ pub struct SymbolPaint {
     /// Symbol paint and layout properties evaluated during placement.
     #[serde(flatten)]
     pub properties: serde_json::Map<String, serde_json::Value>,
+    /// Pre-parsed compiled properties cache.
+    #[serde(skip)]
+    pub(crate) compiled: crate::style::symbol::CompiledProperties,
 }

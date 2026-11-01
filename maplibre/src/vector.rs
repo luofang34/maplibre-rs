@@ -38,7 +38,7 @@ use crate::{
 
 pub(crate) mod content;
 #[cfg(feature = "mlt")]
-mod mlt;
+pub mod mlt;
 pub(crate) mod populate_world_system;
 mod process_vector;
 pub(crate) use process_vector::feature_properties;

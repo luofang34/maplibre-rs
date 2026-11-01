@@ -178,7 +178,7 @@ pub(super) fn tile_uniforms(
             f32::from(textures.drape.is_none()),
             0.0,
         ],
-        edge_heights: Default::default(),
+        edge_index: [0.0; 4],
         surface_color: [0.0; 4],
         fog_position: [0.0; 4],
         daylight: [0.0; 4],

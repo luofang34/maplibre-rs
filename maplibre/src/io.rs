@@ -6,6 +6,8 @@ pub use geozero::mvt::tile::Layer as RawLayer;
 
 pub mod apc;
 pub mod geometry_index;
+#[cfg(feature = "mlt")]
+pub mod mlt;
 pub mod pmtiles;
 pub mod resource_loader;
 pub mod scheduler;

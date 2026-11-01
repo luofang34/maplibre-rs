@@ -23,8 +23,7 @@ struct TerrainTileUniforms {
     moonlight: vec4<f32>,
     procedural_relief: vec4<f32>,
     procedural_grid: vec4<f32>,
-    edge_heights: array<vec4<f32>, 128>,
-    edge_last: vec4<f32>,
+    edge_index: vec4<f32>,
 };
 
 struct VertexOutput {

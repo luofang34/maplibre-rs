@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 
+pub mod compiled;
 mod text;
+pub use compiled::{CompiledProperty, ZoomCurve};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use text::{FormattedText, ImageName, PatternName, TextField, TextSection};
 

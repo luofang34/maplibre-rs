@@ -1,9 +1,63 @@
-//! Cached texture bindings for terrain surfaces and their symbols.
+//! Cached texture bindings for terrain surfaces and their symbols, including edge heights.
 use super::*;
 use crate::render::resource::share_gpu;
 
 impl TerrainResources {
-    /// Binds the uniform block window, a DEM texture and a drape texture for one tile.
+    /// Bind group layout of group one: uniforms, DEM texture, drape texture, sampler, edge storage.
+    pub fn bind_group_layout_entries() -> Vec<wgpu::BindGroupLayoutEntry> {
+        vec![
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: true,
+                    min_binding_size: NonZeroU64::new(
+                        std::mem::size_of::<TerrainTileUniforms>() as u64,
+                    ),
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ]
+    }
+
+    /// Binds the uniform block window, a DEM texture, a drape texture, and edge storage for one tile.
     pub fn create_bind_group(
         &self,
         device: &wgpu::Device,
@@ -33,6 +87,10 @@ impl TerrainResources {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.edge_buffer.as_entire_binding(),
                 },
             ],
         })
