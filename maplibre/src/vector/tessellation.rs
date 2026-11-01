@@ -160,8 +160,6 @@ pub struct ZeroTessellator<I: std::ops::Add + From<lyon::tessellation::VertexId>
     contour_start: Option<[f32; 2]>,
     contour_last: Option<[f32; 2]>,
     subdivision_granularity: u32,
-    /// Whether strokes also split along the diagonals of the subdivision grid.
-    terrain_grid: bool,
     clip_x_to_tile: bool,
     extend_to_north_pole: bool,
     extend_to_south_pole: bool,
@@ -253,7 +251,6 @@ impl<I: std::ops::Add + From<lyon::tessellation::VertexId> + MaxIndex> Default
             contour_start: None,
             contour_last: None,
             subdivision_granularity: 1,
-            terrain_grid: false,
             clip_x_to_tile: false,
             extend_to_north_pole: false,
             extend_to_south_pole: false,

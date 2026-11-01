@@ -60,7 +60,7 @@ pub fn upload_system(
     let refresh_paint = previous_paint != Some(paint_frame);
     let (source_tiles, painted_tiles) =
         sources::frame_sources_and_painted(world, style, view_state)?;
-    let (spatial, changed) = super::structures::for_frame(world, style, &painted_tiles);
+    let (spatial, changed) = super::terrain_lift::for_frame(world, style, &painted_tiles);
     let Some(Initialized(buffer_pool)) = world.resources.get_mut::<Eventually<VectorBufferPool>>()
     else {
         return Err(SystemError::Dependencies);
@@ -75,7 +75,7 @@ pub fn upload_system(
         );
     }
     if changed {
-        super::structures::refresh_gpu(buffer_pool, queue, &spatial, &world.tiles);
+        super::terrain_lift::refresh_gpu(buffer_pool, queue, &spatial, &world.tiles);
     }
     let deferred = upload_tessellated_layer(
         buffer_pool,
@@ -167,7 +167,7 @@ fn upload_tessellated_layer(
     tiles: &mut Tiles,
     style: &Style,
     source_tiles: Vec<crate::coords::WorldTileCoords>,
-    spatial: &[super::structures::SpatialBuffer],
+    spatial: &[super::terrain_lift::SpatialBuffer],
     paint: VectorPaintFrame,
 ) -> bool {
     let mut uploaded_tiles = 0;
@@ -243,7 +243,7 @@ fn upload_bucket(
     queue: &crate::render::upload_queue::UploadQueue,
     style_layer: &crate::style::layer::StyleLayer,
     bucket: &AvailableVectorLayerBucket,
-    spatial: &[super::structures::SpatialBuffer],
+    spatial: &[super::terrain_lift::SpatialBuffer],
     paint: VectorPaintFrame,
 ) -> bool {
     let VectorPaintFrame { zoom, .. } = paint;

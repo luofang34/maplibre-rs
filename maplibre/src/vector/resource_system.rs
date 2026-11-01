@@ -166,21 +166,6 @@ impl PipelineSetup<'_> {
             .initialize_with_prefix_layouts(self.device, layouts)
     }
 
-    /// The pipeline of a line on the terrain surface: tested against the terrain depth as a
-    /// structure is, with the terrain tile it lies on bound after the dash atlas. The stencil
-    /// masks lie on the map plane, below a line lifted onto hills, so the line clips itself to
-    /// its tiles instead.
-    fn create_terrain_line(&self, dashes: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
-        let shader = shaders::TerrainLineShader {
-            format: self.format,
-        };
-        let mut descriptor = self.describe("terrain_line_pipeline", &shader, true, false);
-        descriptor.layout = Some(vec![
-            crate::terrain::resources::TerrainResources::bind_group_layout_entries(),
-        ]);
-        descriptor.initialize_with_prefix_layouts(self.device, &[self.projection, dashes])
-    }
-
     fn describe(
         &self,
         name: &'static str,
@@ -329,13 +314,6 @@ impl PipelineSetup<'_> {
             };
             LinePipeline {
                 flat: self.create("line_pipeline", &shader, &[self.projection, dashes], false),
-                structure: self.create(
-                    "spatial_line_pipeline",
-                    &shader,
-                    &[self.projection, dashes],
-                    true,
-                ),
-                terrain: self.create_terrain_line(dashes),
             }
         });
         circle.initialize(|| {

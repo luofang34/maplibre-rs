@@ -154,9 +154,7 @@ fn hide_draped_layers(world: &mut World, style: &Style) {
     let drapeable: HashSet<&str> = style
         .layers
         .iter()
-        .filter(|layer| {
-            is_drapeable(&layer.type_) && crate::vector::structures::kind(layer).is_none()
-        })
+        .filter(|layer| is_drapeable(&layer.type_))
         .map(|layer| layer.id.as_str())
         .collect();
     if let Some(layer_phase) = world.resources.get_mut::<RenderPhase<LayerItem>>() {

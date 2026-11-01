@@ -23,7 +23,7 @@ pub use circle::CircleShader;
 pub use fill::{FillPatternShader, FillShader};
 pub use fill_extrusion::{ExtrusionPass, FillExtrusionShader};
 pub use heatmap::{HeatmapCompositeShader, HeatmapDensityShader, DENSITY_FORMAT};
-pub use line::{LineShader, TerrainLineShader};
+pub use line::LineShader;
 pub use symbol::SymbolShader;
 pub use symbol_vertex::ShaderSymbolVertex;
 pub use terrain::TerrainShader;
