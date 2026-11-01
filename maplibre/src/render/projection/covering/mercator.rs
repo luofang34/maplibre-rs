@@ -1,20 +1,4 @@
-use crate::{
-    render::{
-        projection::covering::{
-            tile_elevation, ASSUMED_MAX_FEATURE_HEIGHT_METERS, MAX_MERCATOR_HORIZON_DEGREES,
-            TILE_CULLING_HORIZON_ONSET_DEGREES,
-        },
-        view_state::{
-            mercator_covering_tiles, LodHistory, MercatorCoveringOptions, ViewRegion, ViewState,
-            ViewStatePadding,
-        },
-        ProjectionStateError,
-    },
-    style::Style,
-    tcs::world::World,
-    terrain::TileElevationRange,
-    window::CoveringRequest,
-};
+use super::*;
 
 /// Selects Mercator tiles: the ground-plane bounding box for flat views, or frustum culling
 /// with distance-based zoom once terrain is on or the pitch exceeds GL JS's constant-zoom limit.
@@ -68,13 +52,13 @@ pub(super) fn mercator_view_region(
 
 /// Pitch above which GL JS varies zoom per tile: 78.5 degrees minus half the field of view,
 /// clamped to 60 degrees.
-pub(super) fn max_constant_zoom_pitch(fov_degrees: f64) -> f64 {
+pub(crate) fn max_constant_zoom_pitch(fov_degrees: f64) -> f64 {
     (78.5 - fov_degrees / 2.0).clamp(0.0, 60.0)
 }
 
 /// Elevation range of the tile boxes without terrain: the center elevation plus GL JS's
 /// feature-height allowance near the horizon.
-pub(super) fn mercator_elevation_range(
+pub(crate) fn mercator_elevation_range(
     view_state: &ViewState,
     pitch_degrees: f64,
     fov_degrees: f64,

@@ -2,7 +2,10 @@ use super::VectorPaintFrame;
 use crate::{
     coords::WorldTileCoords,
     render::shaders::{FillShaderFeatureMetadata, ShaderLayerMetadata},
-    style::layer::{CirclePitchAlignment, CirclePitchScale, LayerPaint, StyleLayer},
+    style::{
+        circle::{CirclePitchAlignment, CirclePitchScale},
+        layer::{LayerPaint, StyleLayer},
+    },
 };
 
 pub(super) fn metadata_for_layer(

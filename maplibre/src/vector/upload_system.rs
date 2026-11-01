@@ -8,15 +8,11 @@ use crate::{
     render::{
         eventually::{Eventually, Eventually::Initialized},
         memory_budget::UPLOADS_PER_FRAME,
-        shaders::{FillShaderFeatureMetadata, ShaderLayerMetadata, Vec4f32},
+        shaders::{FillShaderFeatureMetadata, Vec4f32},
         tile_view_pattern::WgpuTileViewPattern,
         Renderer,
     },
-    style::{
-        circle::{CirclePitchAlignment, CirclePitchScale},
-        layer::LayerPaint,
-        Style,
-    },
+    style::{layer::LayerPaint, Style},
     tcs::{
         system::{SystemError, SystemResult},
         tiles::Tiles,

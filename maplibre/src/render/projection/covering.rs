@@ -431,4 +431,3 @@ mod mercator;
 pub(crate) mod tests;
 
 use mercator::mercator_view_region;
-pub(super) use mercator::{max_constant_zoom_pitch, mercator_elevation_range};

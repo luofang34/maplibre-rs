@@ -400,4 +400,6 @@ impl HeadlessMap {
 }
 
 #[cfg(all(test, feature = "experimental"))]
+mod shared_assets_tests;
+#[cfg(all(test, feature = "experimental"))]
 mod tests;
