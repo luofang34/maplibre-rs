@@ -201,13 +201,6 @@ impl LayerFrame<'_> {
         let zoom = view_state.style_zoom().value();
         let label_ground = LabelGround::new(self.world, layer, feature, self.paint, zoom);
         let ground = label_ground.elevation;
-        let relevance = self
-            .world
-            .resources
-            .get::<crate::sdf::visibility::SymbolVisibility>()
-            .map_or(1.0, |policy| {
-                policy.opacity(layer, feature, ground, view_state)
-            });
         let limits = self.limits_for(was_visible);
         let line = feature.line.as_ref().map(|_| {
             line_glyph_poses(
@@ -223,7 +216,6 @@ impl LayerFrame<'_> {
             )
         });
         let shown = !suppressed
-            && relevance > 0.0
             && !matches!(line, Some(LinePoses::DoesNotFit))
             && !crate::sdf::placement::buried_in_terrain(self.world, layer, feature, ground)
             && !crate::sdf::placement::beyond_perspective_cutoff(
@@ -314,7 +306,7 @@ impl LayerFrame<'_> {
             text_shift,
             anchor,
             opacity: {
-                let mut opacity = opacity.map(|value| value * relevance);
+                let mut opacity = opacity;
                 // Text that follows its line has no layout off it: while the line cannot hold
                 // it, its glyphs are hidden at once, as GL JS hides them, rather than fading out
                 // in the straight layout they were cut from.

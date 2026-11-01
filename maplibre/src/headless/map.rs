@@ -54,7 +54,6 @@ mod signals;
 mod style;
 #[cfg(test)]
 mod symbol_worker;
-mod symbols;
 mod targets;
 #[cfg(test)]
 mod terrain_coverage;

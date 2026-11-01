@@ -31,7 +31,6 @@ pub mod collision_system;
 pub(crate) mod covering;
 pub(crate) mod depth;
 mod line_glyphs;
-pub mod obstacles;
 mod paint;
 mod placement;
 pub(crate) mod populate_world_system;
@@ -42,7 +41,6 @@ mod resource_system;
 mod textures;
 pub(crate) mod translation;
 mod upload_system;
-pub mod visibility;
 
 pub(crate) mod glyphs;
 pub mod tessellation;
