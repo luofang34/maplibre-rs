@@ -23,9 +23,7 @@ use crate::{
     raster::RasterSourceId,
     render::{
         eye_covering::FrameLodHistory,
-        tile_view_pattern::DEFAULT_TILE_SIZE,
         view_state::{ViewState, ViewStatePadding},
-        xr::PrefetchView,
     },
     style::{source::Source, Style},
     tcs::world::World,
@@ -162,28 +160,7 @@ pub fn view_region_for_projection(
         )?;
         region = union_regions(visible, region, visible_level, SURROUND_MAX_TILES);
     }
-    // A flight in progress requests the frame it is heading for, at that frame's own level.
-    let Some(ahead) = world
-        .resources
-        .get::<PrefetchView>()
-        .and_then(|prefetch| prefetch.view_state.as_ref())
-    else {
-        return Ok(region);
-    };
-    let level = ahead.zoom().zoom_level(DEFAULT_TILE_SIZE);
-    let destination = covering_region(
-        style,
-        ahead,
-        world,
-        CoveringRequest::view(level, ahead.zoom().value()),
-        ViewStatePadding::Tight,
-    )?;
-    Ok(union_regions(
-        region,
-        destination,
-        visible_level,
-        PREFETCH_MAX_TILES,
-    ))
+    Ok(region)
 }
 
 /// The tiles each raster source used by a visible layer covers, following that source's tile
@@ -356,11 +333,6 @@ fn globe_view_region(
         .map_err(|source| ProjectionStateError::GlobeCovering { source })?;
     Ok(Some(ViewRegion::from_tiles(tiles, visible_level, 512)))
 }
-
-/// Tiles a request may hold once a flight's destination is added to what the eye sees. The
-/// destination's covering comes nearest first, so this many tiles are the ground around
-/// the arrival gaze; the rest load after landing, when they can be drawn.
-const PREFETCH_MAX_TILES: usize = 96;
 
 /// The tiles of both regions, those of `primary` first, as one region at `level`, at most
 /// `max_tiles` of them, or all primary tiles when that view alone exceeds the limit.

@@ -450,6 +450,10 @@ fn flat_pose_of(frame: &EyeFrame, anchor: ExternalAnchor, body: Body) -> CameraP
 mod tests;
 
 #[cfg(test)]
+#[path = "external/placement_tests.rs"]
+mod placement_tests;
+
+#[cfg(test)]
 #[path = "external/regression/tests.rs"]
 mod regression;
 

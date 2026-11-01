@@ -256,7 +256,7 @@ pub struct RendererSettings {
     /// brightness of a pixel counts how often it was drawn, as GL JS's overdraw inspector does.
     pub overdraw_inspector: bool,
     /// Allocates and populates a persistent single-sample reversed-Z `Depth32Float` attachment
-    /// via `DEPTH_COPY` on offscreen targets so hosts can sample or copy depth without `XrFrame`.
+    /// via `DEPTH_COPY` on offscreen targets so hosts can sample or copy depth.
     pub depth_readout: bool,
 }
 

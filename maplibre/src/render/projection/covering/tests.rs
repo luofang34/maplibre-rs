@@ -1,6 +1,6 @@
 #![allow(clippy::expect_used, clippy::panic)]
 use super::*;
-use crate::projection::body::Body;
+use crate::{projection::body::Body, render::tile_view_pattern::DEFAULT_TILE_SIZE};
 
 #[test]
 fn prefetch_limits_preserve_every_primary_tile() {
@@ -42,7 +42,7 @@ fn moving_eye_requests_start_with_all_visible_tiles() {
         r#"{"version":8,"sources":{},"layers":[],"terrain":{"source":"dem"}}"#,
     )
     .expect("style");
-    let mut world = World::default();
+    let world = World::default();
     for pitch in [60.0, 85.0, 90.0] {
         let mut view = ViewState::new(
             PhysicalSize::new(3840, 2160).expect("viewport"),
@@ -51,7 +51,6 @@ fn moving_eye_requests_start_with_all_visible_tiles() {
             Deg(0.0),
             Deg(45.0),
         );
-        let mut destination = None;
         for height in [8000.0, 4000.0] {
             view.set_external_view(
                 ExternalView {
@@ -68,19 +67,10 @@ fn moving_eye_requests_start_with_all_visible_tiles() {
                 &ProjectionType::Mercator,
             )
             .expect("pose");
-            if destination.is_none() {
-                destination = Some(view.clone());
-            }
         }
         assert!(!view.eye_settled());
         view.set_request_overscan(1.5);
         assert_visible_requests(&style, &view, &world);
-        world.resources.insert(PrefetchView {
-            view_state: destination,
-            placement: None,
-        });
-        assert_visible_requests(&style, &view, &world);
-        world.resources.insert(PrefetchView::default());
     }
 }
 

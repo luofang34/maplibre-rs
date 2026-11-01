@@ -172,28 +172,19 @@ impl PolarMap {
 
     fn frame(&mut self, view: View) {
         self.timestamp += 16;
-        let frame = XrFrame {
+        let frame = ExternalFrame {
             opaque_environment: false,
             timestamp: Duration::from_millis(self.timestamp),
-            placement: ScenePlacement {
-                anchor: ExternalAnchor {
-                    position: LatLon::new(view.latitude, 11.0),
-                    altitude_meters: 0.0,
-                },
-                world_from_scene: Matrix4::identity(),
-            },
-            eyes: vec![XrEye {
-                world_from_eye: view.world_from_eye(),
-                frustum: EyeFrustum::symmetric(Rad(1.0), 1.0, NEAR, FAR),
-                target: EyeTarget {
-                    color: None,
-                    depth: Some(self.depth.create_view(&Default::default())),
-                },
-            }],
+            view: eye_view(
+                LatLon::new(view.latitude, 11.0),
+                0.0,
+                view.world_from_eye(),
+                EyeFrustum::symmetric(Rad(1.0), 1.0, NEAR, FAR),
+            ),
+            depth: Some(self.depth.create_view(&Default::default())),
             request_overscan: 1.0,
-            prefetch: None,
         };
-        self.map.run_xr_frame(frame).expect("polar frame");
+        self.map.run_external_frame(frame).expect("polar frame");
     }
 
     /// Paints every drape white, so drape stretched into the cap would show as white.

@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used, clippy::panic)]
 use cgmath::{Deg, Matrix4};
 
-use super::regression::frame;
+use super::regression::{frame_from, overhead};
 use crate::{
     headless::{create_headless_renderer, map::HeadlessMap},
     render::{
@@ -63,14 +63,8 @@ fn texture_bytes_blocking(map: &HeadlessMap, texture: &wgpu::Texture) -> Vec<u8>
 async fn delayed_textures_preserve_surface_and_radial_haze_across_the_horizon() {
     let mut map = map().await;
     for pitch in [89.9, 90.1] {
-        let view = || {
-            let mut view = frame(16);
-            view.eyes.truncate(1);
-            view.eyes[0].world_from_eye =
-                view.eyes[0].world_from_eye * Matrix4::from_angle_x(Deg(pitch));
-            view
-        };
-        map.run_xr_frame(view()).expect("first frame");
+        let view = || frame_from(16, overhead() * Matrix4::from_angle_x(Deg(pitch)));
+        map.run_external_frame(view()).expect("first frame");
         let first = read_back_blocking(&map);
         let Some(Initialized(terrain)) =
             map.world().resources.get::<Eventually<TerrainResources>>()
@@ -88,7 +82,7 @@ async fn delayed_textures_preserve_surface_and_radial_haze_across_the_horizon() 
             );
         }
         for _ in 0..16 {
-            map.run_xr_frame(view()).expect("refinement");
+            map.run_external_frame(view()).expect("refinement");
         }
         let refined = read_back_blocking(&map);
         let difference = first
@@ -157,12 +151,12 @@ async fn map() -> HeadlessMap {
 }
 
 #[tokio::test]
-async fn rolled_sky_exports_valid_compositor_depth_with_and_without_msaa() {
+async fn rolled_sky_exports_valid_depth_with_and_without_msaa() {
     for samples in [1, 4] {
         let mut map = map().await;
         map.map_context.renderer.settings.msaa = crate::render::settings::Msaa { samples };
         let depth = map.device().create_texture(&wgpu::TextureDescriptor {
-            label: Some("compositor sky depth"),
+            label: Some("sky depth"),
             size: wgpu::Extent3d {
                 width: SIZE,
                 height: SIZE,
@@ -175,13 +169,12 @@ async fn rolled_sky_exports_valid_compositor_depth_with_and_without_msaa() {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let mut view = frame(16);
-        view.eyes.truncate(1);
-        view.eyes[0].world_from_eye = view.eyes[0].world_from_eye
-            * Matrix4::from_angle_x(Deg(90.1))
-            * Matrix4::from_angle_z(Deg(25.0));
-        view.eyes[0].target.depth = Some(depth.create_view(&Default::default()));
-        map.run_xr_frame(view).expect("rolled frame");
+        let mut view = frame_from(
+            16,
+            overhead() * Matrix4::from_angle_x(Deg(90.1)) * Matrix4::from_angle_z(Deg(25.0)),
+        );
+        view.depth = Some(depth.create_view(&Default::default()));
+        map.run_external_frame(view).expect("rolled frame");
         let colors = read_back_blocking(&map);
         let depths = texture_bytes_blocking(&map, &depth);
         let horizon = map.view_state().horizon_line();
@@ -196,8 +189,10 @@ async fn rolled_sky_exports_valid_compositor_depth_with_and_without_msaa() {
                 let value =
                     f32::from_le_bytes(depths[offset..offset + 4].try_into().expect("depth"));
                 assert!(colors[offset + 3] > 0, "sky has color");
-                assert!(value.is_finite() && value > 0.0 && value < 1.0,
-                    "opaque sky at ({x},{y}) has invalid compositor depth {value}, samples {samples}");
+                assert!(
+                    value.is_finite() && value > 0.0 && value < 1.0,
+                    "opaque sky at ({x},{y}) has invalid depth {value}, samples {samples}"
+                );
                 sky_pixels = sky_pixels.wrapping_add(1);
             }
         }
@@ -212,12 +207,11 @@ async fn exposed_background_below_a_rolled_horizon_keeps_sky_coverage() {
         // Without a ground mesh, every pixel exposes the background a valley would reveal.
         map.map_context.style.terrain = None;
         map.map_context.renderer.settings.msaa = crate::render::settings::Msaa { samples };
-        let mut view = frame(16);
-        view.eyes.truncate(1);
-        view.eyes[0].world_from_eye = view.eyes[0].world_from_eye
-            * Matrix4::from_angle_x(Deg(100.0))
-            * Matrix4::from_angle_z(Deg(25.0));
-        map.run_xr_frame(view).expect("valley background");
+        let view = frame_from(
+            16,
+            overhead() * Matrix4::from_angle_x(Deg(100.0)) * Matrix4::from_angle_z(Deg(25.0)),
+        );
+        map.run_external_frame(view).expect("valley background");
         let pixels = read_back_blocking(&map);
         let horizon = map.view_state().horizon_line();
         let mut checked = 0_u32;
@@ -243,19 +237,20 @@ async fn exposed_background_below_a_rolled_horizon_keeps_sky_coverage() {
 mod ocean;
 
 #[tokio::test]
-async fn full_immersion_has_sky_coverage_even_before_the_globe_transition() {
+async fn an_opaque_environment_has_sky_coverage_even_before_the_globe_transition() {
     let mut map = map().await;
     map.map_context.style.projection = Some(crate::projection::ProjectionSpecification {
         projection_type: crate::projection::ProjectionType::Globe,
     });
     map.map_context.style.terrain = None;
-    let mut view = frame(16);
-    view.opaque_environment = true;
-    view.eyes.truncate(1);
-    view.eyes[0].world_from_eye =
+    let mut view = frame_from(
+        16,
         cgmath::Matrix4::from_translation(cgmath::Vector3::new(0.0, 0.0, 40_000_000.0))
-            * Matrix4::from_angle_x(Deg(100.0));
-    map.run_xr_frame(view).expect("opaque globe environment");
+            * Matrix4::from_angle_x(Deg(100.0)),
+    );
+    view.opaque_environment = true;
+    map.run_external_frame(view)
+        .expect("opaque globe environment");
     let pixels = read_back_blocking(&map);
     assert!(
         pixels
@@ -263,6 +258,6 @@ async fn full_immersion_has_sky_coverage_even_before_the_globe_transition() {
             .0
             .iter()
             .all(|pixel| pixel[3] == 255),
-        "the host requests coverage across the whole frame"
+        "the frame asks for coverage across the whole frame"
     );
 }

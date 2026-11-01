@@ -2,18 +2,21 @@
 
 use std::time::Duration;
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 
 use super::*;
 use crate::{
     coords::LatLon,
-    headless::{create_headless_renderer_with_settings, map::HeadlessMap},
+    headless::{
+        create_headless_renderer_with_settings,
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            HeadlessMap,
+        },
+    },
     render::{
-        camera::EyeFrustum,
-        settings::RendererSettings,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-        RenderPlugin,
+        camera::EyeFrustum, eventually::Eventually::Initialized, resource::TextureView,
+        settings::RendererSettings, RenderPlugin,
     },
     style::Style,
 };
@@ -65,39 +68,27 @@ fn target(map: &HeadlessMap, usage: wgpu::TextureUsages) -> wgpu::Texture {
     })
 }
 
-/// One eye three kilometres up, looking straight down, into `color`.
+/// One view three kilometres up, looking straight down, into `color`.
 fn look_down(map: &mut HeadlessMap, color: &wgpu::Texture) {
-    map.run_xr_frame(XrFrame {
+    map.map_context.renderer.resources.render_target =
+        Initialized(TextureView::from(color.create_view(&Default::default())));
+    map.run_external_frame(ExternalFrame {
         opaque_environment: true,
         timestamp: Duration::from_millis(16),
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: LatLon::new(40.577, -74.738),
-                altitude_meters: 0.0,
-            },
-            world_from_scene: Matrix4::identity(),
-        },
-        eyes: vec![XrEye {
-            world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 3000.0)),
-            frustum: EyeFrustum::symmetric(
-                Rad(1.0),
-                f64::from(WIDTH) / f64::from(HEIGHT),
-                1.0,
-                1.0e6,
-            ),
-            target: EyeTarget {
-                color: Some(color.create_view(&Default::default())),
-                depth: None,
-            },
-        }],
+        view: eye_view(
+            LatLon::new(40.577, -74.738),
+            0.0,
+            Matrix4::from_translation(Vector3::new(0.0, 0.0, 3000.0)),
+            EyeFrustum::symmetric(Rad(1.0), f64::from(WIDTH) / f64::from(HEIGHT), 1.0, 1.0e6),
+        ),
+        depth: None,
         request_overscan: 1.0,
-        prefetch: None,
     })
-    .expect("the eye renders");
+    .expect("the view renders");
 }
 
 #[tokio::test]
-async fn an_eye_target_reads_back_as_the_drawn_background_in_both_layouts() {
+async fn a_host_target_reads_back_as_the_drawn_background_in_both_layouts() {
     for format in [
         wgpu::TextureFormat::Rgba8Unorm,
         wgpu::TextureFormat::Bgra8Unorm,

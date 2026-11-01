@@ -1,17 +1,18 @@
 #![allow(clippy::expect_used, clippy::panic)]
 use std::time::Duration;
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 
 use crate::{
     coords::{LatLon, WorldTileCoords},
-    headless::{create_headless_renderer, map::HeadlessMap},
-    render::{
-        camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-        RenderPlugin,
+    headless::{
+        create_headless_renderer,
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            HeadlessMap,
+        },
     },
+    render::{camera::EyeFrustum, RenderPlugin},
     style::Style,
 };
 
@@ -44,23 +45,17 @@ fn render_at(map: &mut HeadlessMap, camera: Matrix4<f64>) {
 
 fn render_at_anchor(map: &mut HeadlessMap, camera: Matrix4<f64>, anchor: LatLon) {
     for timestamp in [0, 16, 32] {
-        map.run_xr_frame(XrFrame {
+        map.run_external_frame(ExternalFrame {
             opaque_environment: true,
             timestamp: Duration::from_millis(timestamp),
-            placement: ScenePlacement {
-                anchor: ExternalAnchor {
-                    position: anchor,
-                    altitude_meters: 0.0,
-                },
-                world_from_scene: Matrix4::identity(),
-            },
-            eyes: vec![XrEye {
-                world_from_eye: camera,
-                frustum: EyeFrustum::symmetric(Rad(1.0), 1.0, 0.05, 1e9),
-                target: EyeTarget::default(),
-            }],
+            view: eye_view(
+                anchor,
+                0.0,
+                camera,
+                EyeFrustum::symmetric(Rad(1.0), 1.0, 0.05, 1e9),
+            ),
+            depth: None,
             request_overscan: 1.0,
-            prefetch: None,
         })
         .expect("structure frame");
     }

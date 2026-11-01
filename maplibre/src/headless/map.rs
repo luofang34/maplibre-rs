@@ -38,6 +38,7 @@ use crate::{
 mod camera;
 mod dem;
 mod error;
+pub(crate) mod external_frame;
 #[cfg(test)]
 mod injected_loader;
 mod labels;
@@ -60,14 +61,12 @@ mod terrain_coverage;
 mod terrain_patch;
 #[cfg(test)]
 mod vertical_perspective;
-mod xr;
 
 pub use processed::{
     process_geojson_layers, process_geojson_layers_with_atlas, process_tile_layers,
     process_tile_layers_with_atlas, ProcessedLayers, SymbolLayer, VectorLayer,
 };
 pub use terrain_patch::TerrainPatchSnapshot;
-pub use xr::XrFrameError;
 
 pub use crate::io::tile_json::resolve_tile_json_sources;
 

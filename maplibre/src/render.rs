@@ -63,8 +63,6 @@ pub mod error;
 pub mod eventually;
 pub mod eye_covering;
 pub mod memory_budget;
-#[cfg(all(test, feature = "headless"))]
-pub(crate) use systems::retention_system::drawn_tiles;
 #[cfg(feature = "headless")]
 pub(crate) use systems::retention_system::RetainLoadedTiles;
 pub mod after_submit;
@@ -86,7 +84,6 @@ pub mod tile_view_pattern;
 pub mod tracked_pass;
 pub mod upload_queue;
 pub mod view_state;
-pub mod xr;
 
 pub use after_submit::*;
 pub use pass_hooks::*;

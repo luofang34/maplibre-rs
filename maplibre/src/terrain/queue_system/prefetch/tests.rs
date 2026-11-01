@@ -1,5 +1,3 @@
-use cgmath::{Matrix4, SquareMatrix, Vector3};
-
 use super::*;
 use crate::{
     coords::{LatLon, WorldCoords, Zoom, ZoomLevel},
@@ -25,7 +23,7 @@ fn speculative_work_excludes_visible_and_respects_count_and_bytes() {
 #[test]
 #[allow(clippy::expect_used, clippy::panic)]
 fn moving_terrain_prepares_offscreen_tiles_and_clears_them_under_pressure() {
-    let (style, view, external) = immersive_view();
+    let (style, view, _) = immersive_view();
     let mut world = World::default();
     let dem = crate::terrain::source::dem_source(&style).expect("terrain");
     let visible = crate::render::projection::terrain_region(
@@ -38,22 +36,6 @@ fn moving_terrain_prepares_offscreen_tiles_and_clears_them_under_pressure() {
     .expect("covering")
     .expect("visible");
     let visible = super::super::covering::bounded_covering(visible.iter(), 24);
-    let mut ahead = view.clone();
-    ahead
-        .set_external_view(
-            ExternalView {
-                view: Matrix4::from_translation(Vector3::new(10_000.0, 0.0, 4000.0))
-                    .invert()
-                    .expect("pose"),
-                ..external
-            },
-            &ProjectionType::Mercator,
-        )
-        .expect("ahead");
-    world.resources.insert(PrefetchView {
-        view_state: Some(ahead),
-        placement: None,
-    });
     prepare(&style, &view, &mut world, &visible, MemoryBudget::default());
     let requests = &world
         .resources

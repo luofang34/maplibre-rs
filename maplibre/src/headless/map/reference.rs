@@ -14,11 +14,12 @@ pub use super::readback::{
     read as read_texture, read_blocking as read_texture_blocking, ReadbackError,
 };
 use crate::{
-    headless::map::{readback, xr::XrFrameError, HeadlessMap},
+    headless::map::{
+        external_frame::ExternalFrame, readback, HeadlessMap, HeadlessMapOperationError,
+    },
     render::{
         camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
+        view_state::{ExternalAnchor, ExternalView},
     },
 };
 
@@ -92,9 +93,12 @@ pub enum ReferenceError {
     /// The map has no colour texture to read.
     #[error("the map has no colour texture")]
     MissingColour,
+    /// The camera pose has no inverse, so it looks from nowhere.
+    #[error("reference camera pose is singular")]
+    SingularPose,
     /// Drawing the view failed.
     #[error("reference view could not be drawn")]
-    Draw(#[from] XrFrameError),
+    Draw(#[from] HeadlessMapOperationError),
     /// Reading the colour or depth texture failed.
     #[error("reference view could not be read back")]
     Readback(#[from] ReadbackError),
@@ -158,25 +162,21 @@ impl ReferenceTarget {
         world_from_eye: Matrix4<f64>,
     ) -> Result<(), ReferenceError> {
         self.check_size(map)?;
+        let view = ExternalView {
+            anchor,
+            view: world_from_eye
+                .invert()
+                .ok_or(ReferenceError::SingularPose)?,
+            frustum: self.intrinsics.frustum(),
+        };
         for _ in 0..REFERENCE_SETTLE_FRAMES {
             let timestamp = map.frame_input_mut().timestamp + SETTLE_FRAME_INTERVAL;
-            map.run_xr_frame(XrFrame {
+            map.run_external_frame(ExternalFrame {
                 timestamp,
                 opaque_environment: true,
-                placement: ScenePlacement {
-                    anchor,
-                    world_from_scene: Matrix4::identity(),
-                },
-                eyes: vec![XrEye {
-                    world_from_eye,
-                    frustum: self.intrinsics.frustum(),
-                    target: EyeTarget {
-                        color: None,
-                        depth: Some(self.depth.create_view(&Default::default())),
-                    },
-                }],
+                view,
+                depth: Some(self.depth.create_view(&Default::default())),
                 request_overscan: 1.0,
-                prefetch: None,
             })?;
         }
         Ok(())

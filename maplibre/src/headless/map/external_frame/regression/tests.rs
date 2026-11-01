@@ -2,8 +2,9 @@
 
 use std::time::Duration;
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 
+use super::{tests::eye_view, ExternalFrame};
 use crate::{
     context::MapContext,
     coords::LatLon,
@@ -12,8 +13,6 @@ use crate::{
         camera::EyeFrustum,
         eventually::{Eventually, Eventually::Initialized},
         frame_input::frame_input_system,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
         RenderPlugin, RenderStageLabel,
     },
     style::Style,
@@ -24,7 +23,7 @@ use crate::{
 #[derive(Default)]
 struct Observations {
     extractions: usize,
-    eyes: Vec<(usize, Vec<crate::coords::WorldTileCoords>, usize)>,
+    frames: Vec<(usize, Vec<crate::coords::WorldTileCoords>, usize)>,
 }
 
 fn ingest(context: &mut MapContext) -> SystemResult {
@@ -45,37 +44,38 @@ fn observe(context: &mut MapContext) -> SystemResult {
         .map_or(0, |phase| phase.targets.len());
     let observations = world.resources.get_or_init_mut::<Observations>();
     observations
-        .eyes
+        .frames
         .push((observations.extractions, drawn, drapes));
     Ok(())
 }
 
-pub(super) fn frame(timestamp: u64) -> XrFrame {
-    XrFrame {
+/// A frame of the view from `world_from_eye` of ground at Innsbruck.
+pub(super) fn frame_from(timestamp: u64, world_from_eye: Matrix4<f64>) -> ExternalFrame {
+    ExternalFrame {
         opaque_environment: false,
         timestamp: Duration::from_millis(timestamp),
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: LatLon::new(47.26, 11.39),
-                altitude_meters: 0.0,
-            },
-            world_from_scene: Matrix4::identity(),
-        },
-        eyes: [-0.032, 0.032]
-            .into_iter()
-            .map(|x| XrEye {
-                world_from_eye: Matrix4::from_translation(Vector3::new(x, 0.0, 4000.0)),
-                frustum: EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1.0e8),
-                target: EyeTarget::default(),
-            })
-            .collect(),
+        view: eye_view(
+            LatLon::new(47.26, 11.39),
+            0.0,
+            world_from_eye,
+            EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1.0e8),
+        ),
+        depth: None,
         request_overscan: 1.5,
-        prefetch: None,
     }
 }
 
+/// Four kilometres up, looking straight down.
+pub(super) fn overhead() -> Matrix4<f64> {
+    Matrix4::from_translation(Vector3::new(-0.032, 0.0, 4000.0))
+}
+
+fn frame(timestamp: u64) -> ExternalFrame {
+    frame_from(timestamp, overhead())
+}
+
 #[tokio::test]
-async fn stereo_ingests_and_refines_terrain_once_per_frame() {
+async fn a_still_view_ingests_and_refines_terrain_once_per_frame() {
     let style: Style = serde_json::from_str(r##"{"version":8,"sources":{"dem":{"type":"raster-dem","tiles":["https://dem.example/{z}/{x}/{y}.png"]}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#718474"}}],"terrain":{"source":"dem"}}"##).expect("terrain style");
     let (kernel, renderer) = create_headless_renderer(2048, 2048, None)
         .await
@@ -104,32 +104,23 @@ async fn stereo_ingests_and_refines_terrain_once_per_frame() {
     );
     map.schedule
         .add_system_to_stage(RenderStageLabel::PhaseSort, observe);
-    map.run_xr_frame(frame(16)).expect("first stereo frame");
-    map.run_xr_frame(frame(32)).expect("second stereo frame");
+    map.run_external_frame(frame(16)).expect("first frame");
+    map.run_external_frame(frame(32)).expect("second frame");
     let observations = map
         .world()
         .resources
         .get::<Observations>()
         .expect("observations");
     assert_eq!(observations.extractions, 2);
-    for pair in observations.eyes.as_chunks::<2>().0.iter() {
-        assert_eq!(
-            pair[0].0, pair[1].0,
-            "both eyes have the same ingestion generation"
-        );
-        assert_eq!(
-            pair[0].1, pair[1].1,
-            "both eyes draw the same terrain refinements"
-        );
-        assert!(!pair[0].1.is_empty());
-        assert!(pair[0].2 <= 8);
-        assert_eq!(pair[1].2, 0, "later eyes reuse completed drapes");
+    for observed in &observations.frames {
+        assert!(!observed.1.is_empty());
+        assert!(observed.2 <= 8);
     }
-    assert!(observations.eyes[0].2 > 0);
+    assert!(observations.frames[0].2 > 0);
     // A tile may be refined into its children between the frames, but the surface they cover
     // stays the same: the area is equal and every tile of the second frame lies in one of the
     // first.
-    let (first, second) = (&observations.eyes[0].1, &observations.eyes[2].1);
+    let (first, second) = (&observations.frames[0].1, &observations.frames[1].1);
     use crate::coords::WorldTileCoords;
     let area = |tiles: &[WorldTileCoords]| -> f64 {
         tiles
@@ -151,7 +142,7 @@ async fn stereo_ingests_and_refines_terrain_once_per_frame() {
 }
 
 #[tokio::test]
-async fn head_motion_and_stationary_frames_both_request_visible_tiles() {
+async fn moving_and_stationary_external_views_both_request_visible_tiles() {
     use crate::{projection::ProjectionType, render::frame_input::ViewSource, schedule::Stage};
     let style: Style = serde_json::from_str(r#"{"version":8,"sources":{"v":{"type":"vector","tiles":["https://unused.example/{z}/{x}/{y}.pbf"]}},"layers":[]}"#).expect("style");
     let (kernel, renderer) = create_headless_renderer(128, 128, None)
@@ -169,19 +160,12 @@ async fn head_motion_and_stationary_frames_both_request_visible_tiles() {
         ],
     )
     .expect("map");
-    let frame = frame(16);
-    let eye = &frame.eyes[0];
-    let initial = frame
-        .placement
-        .view_from(eye.world_from_eye, eye.frustum)
-        .expect("initial view");
-    let settled = frame
-        .placement
-        .view_from(
-            Matrix4::from_translation(Vector3::new(0.0, 0.0, 2000.0)),
-            eye.frustum,
-        )
-        .expect("destination view");
+    let initial = frame(16).view;
+    let settled = frame_from(
+        16,
+        Matrix4::from_translation(Vector3::new(0.0, 0.0, 2000.0)),
+    )
+    .view;
     map.map_context
         .view_state
         .set_external_view(initial, &ProjectionType::Mercator)
@@ -196,7 +180,7 @@ async fn head_motion_and_stationary_frames_both_request_visible_tiles() {
     assert!(!map.view_state().eye_settled());
     assert!(
         !map.world().tiles.tiles.is_empty(),
-        "head motion must not suspend visible requests"
+        "motion must not suspend visible requests"
     );
     map.map_context.world.tiles.clear();
     map.map_context.view_state.update_references();
@@ -209,12 +193,12 @@ async fn head_motion_and_stationary_frames_both_request_visible_tiles() {
     assert!(!map.view_state().did_camera_change());
     assert!(
         !map.world().tiles.tiles.is_empty(),
-        "settling resumes requests without head movement"
+        "settling resumes requests without movement"
     );
 }
 
 #[tokio::test]
-async fn invalid_second_eye_preserves_the_complete_frame_and_recovers() {
+async fn an_invalid_view_preserves_the_last_frame_and_recovers() {
     let style: Style = serde_json::from_str(r##"{"version":8,"sources":{},"layers":[{"id":"background","type":"background","paint":{"background-color":"#718474"}}]}"##).expect("style");
     let (kernel, renderer) = create_headless_renderer(64, 64, None)
         .await
@@ -229,34 +213,21 @@ async fn invalid_second_eye_preserves_the_complete_frame_and_recovers() {
         ],
     )
     .expect("map");
-    map.run_xr_frame(frame(16)).expect("valid stereo");
+    map.run_external_frame(frame(16)).expect("valid view");
     let previous = map.view_state().view_projection().0;
-    let generation = map
-        .world()
-        .resources
-        .get::<crate::render::eye_covering::EyeInFrame>()
-        .expect("frame")
-        .frame;
     let mut invalid = frame(32);
-    invalid.eyes[1].frustum.near = f64::NAN;
+    invalid.view.frustum.near = f64::NAN;
     assert!(matches!(
-        map.run_xr_frame(invalid),
-        Err(super::XrFrameError::InvalidView { index: 1, .. })
+        map.run_external_frame(invalid),
+        Err(crate::headless::map::HeadlessMapOperationError::ExternalView { .. })
     ));
     assert_eq!(map.view_state().view_projection().0, previous);
-    assert_eq!(
-        map.world()
-            .resources
-            .get::<crate::render::eye_covering::EyeInFrame>()
-            .expect("preserved frame")
-            .frame,
-        generation
-    );
-    map.run_xr_frame(frame(48)).expect("tracking recovered");
+    map.run_external_frame(frame(48))
+        .expect("the view recovered");
 }
 
 #[tokio::test]
-async fn both_eyes_of_an_xr_frame_land_in_one_timeline_record() {
+async fn an_external_frame_lands_in_one_timeline_record() {
     use crate::render::frame_trace::Clock;
     let style: Style =
         serde_json::from_str(r#"{"version":8,"sources":{},"layers":[]}"#).expect("style");
@@ -267,7 +238,7 @@ async fn both_eyes_of_an_xr_frame_land_in_one_timeline_record() {
         HeadlessMap::new(style, renderer, kernel, vec![Box::new(RenderPlugin)]).expect("map");
     map.enable_frame_trace(16);
     for timestamp in [16, 32] {
-        map.run_xr_frame(frame(timestamp)).expect("stereo frame");
+        map.run_external_frame(frame(timestamp)).expect("frame");
         // The host records under the number the map reports after the frame.
         let host_frame = map.last_frame_stats().host_frame;
         map.frame_trace_mut().expect("trace").record_span(
@@ -285,7 +256,7 @@ async fn both_eyes_of_an_xr_frame_land_in_one_timeline_record() {
             .map(|record| record.frame)
             .collect::<Vec<_>>(),
         [1, 2],
-        "one record per stereo frame"
+        "one record per frame"
     );
     for record in &export.frames {
         let renders = record
@@ -294,29 +265,29 @@ async fn both_eyes_of_an_xr_frame_land_in_one_timeline_record() {
             .filter(|span| span.name == "Render")
             .count();
         assert_eq!(
-            renders, 2,
-            "both eyes' stages are in the frame's record: {record:?}"
+            renders, 1,
+            "the frame's stages are in its record: {record:?}"
         );
         assert!(record.spans.iter().any(|span| span.name == "copy-encode"));
     }
 }
 
 #[derive(Default)]
-struct MovedEyes(Vec<bool>);
+struct MovedFrames(Vec<bool>);
 
 fn note_moved(context: &mut MapContext) -> SystemResult {
     let moved = crate::render::frame_signals::camera_moved(&context.world, &context.view_state);
     context
         .world
         .resources
-        .get_or_init_mut::<MovedEyes>()
+        .get_or_init_mut::<MovedFrames>()
         .0
         .push(moved);
     Ok(())
 }
 
 #[tokio::test]
-async fn each_eye_of_a_still_stereo_view_is_at_rest() {
+async fn a_still_external_view_is_at_rest() {
     let style: Style =
         serde_json::from_str(r#"{"version":8,"sources":{},"layers":[]}"#).expect("style");
     let (kernel, renderer) = create_headless_renderer(64, 64, None)
@@ -326,18 +297,18 @@ async fn each_eye_of_a_still_stereo_view_is_at_rest() {
         HeadlessMap::new(style, renderer, kernel, vec![Box::new(RenderPlugin)]).expect("map");
     map.schedule
         .add_system_to_stage(RenderStageLabel::Queue, note_moved);
-    // The same placement twice: each eye sees what it saw the frame before.
-    map.run_xr_frame(frame(16)).expect("first stereo frame");
-    map.run_xr_frame(frame(32)).expect("second stereo frame");
+    // The same view twice: the map sees what it saw the frame before.
+    map.run_external_frame(frame(16)).expect("first frame");
+    map.run_external_frame(frame(32)).expect("second frame");
     let moved = &map
         .world()
         .resources
-        .get::<MovedEyes>()
+        .get::<MovedFrames>()
         .expect("observed")
         .0;
     assert_eq!(
-        moved[2..],
-        [false, false],
-        "neither eye moved, so drapes catch up at full pace: {moved:?}"
+        moved[1..],
+        [false],
+        "the view did not move, so drapes catch up at full pace: {moved:?}"
     );
 }

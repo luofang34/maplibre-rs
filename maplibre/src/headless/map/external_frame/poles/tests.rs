@@ -2,17 +2,18 @@
 
 use std::time::Duration;
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 
 use crate::{
     coords::LatLon,
-    headless::{create_headless_renderer, map::HeadlessMap},
-    render::{
-        camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-        RenderPlugin,
+    headless::{
+        create_headless_renderer,
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            HeadlessMap,
+        },
     },
+    render::{camera::EyeFrustum, RenderPlugin},
     style::Style,
 };
 
@@ -47,26 +48,17 @@ async fn both_polar_caps_export_surface_color_and_depth() {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        map.run_xr_frame(XrFrame {
+        map.run_external_frame(ExternalFrame {
             opaque_environment: false,
             timestamp: Duration::ZERO,
-            placement: ScenePlacement {
-                anchor: ExternalAnchor {
-                    position: LatLon::new(latitude, 11.0),
-                    altitude_meters: 0.0,
-                },
-                world_from_scene: Matrix4::identity(),
-            },
-            eyes: vec![XrEye {
-                world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 40_000_000.0)),
-                frustum: EyeFrustum::symmetric(Rad(1.0), 1.0, 0.1, 1e10),
-                target: EyeTarget {
-                    color: None,
-                    depth: Some(depth.create_view(&Default::default())),
-                },
-            }],
+            view: eye_view(
+                LatLon::new(latitude, 11.0),
+                0.0,
+                Matrix4::from_translation(Vector3::new(0.0, 0.0, 40_000_000.0)),
+                EyeFrustum::symmetric(Rad(1.0), 1.0, 0.1, 1e10),
+            ),
+            depth: Some(depth.create_view(&Default::default())),
             request_overscan: 1.0,
-            prefetch: None,
         })
         .expect("polar frame");
         let colors = read_blocking(&map, map.head_texture().expect("color"));

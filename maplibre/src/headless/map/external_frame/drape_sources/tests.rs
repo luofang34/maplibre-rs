@@ -6,23 +6,23 @@ use std::{
     time::Duration,
 };
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 
 use crate::{
     coords::LatLon,
-    headless::{create_headless_renderer_with_loader, map::HeadlessMap},
+    headless::{
+        create_headless_renderer_with_loader,
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            HeadlessMap,
+        },
+    },
     io::{
         resource_loader::SharedLoader,
         source_client::{HttpClient, SourceFetchError},
     },
     raster::{DefaultRasterTransferables, RasterPlugin},
-    render::{
-        camera::EyeFrustum,
-        eventually::Eventually::Initialized,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-        RenderPlugin,
-    },
+    render::{camera::EyeFrustum, eventually::Eventually::Initialized, RenderPlugin},
     style::Style,
     terrain::{resources::TerrainResources, DefaultDemTransferables, TerrainPlugin},
 };
@@ -86,24 +86,18 @@ fn style(extra: &str) -> Style {
     .expect("style")
 }
 
-fn frame(timestamp: u64) -> XrFrame {
-    XrFrame {
+fn frame(timestamp: u64) -> ExternalFrame {
+    ExternalFrame {
         opaque_environment: true,
         timestamp: Duration::from_millis(timestamp),
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: LatLon::new(40.577, -74.738),
-                altitude_meters: 0.0,
-            },
-            world_from_scene: Matrix4::identity(),
-        },
-        eyes: vec![XrEye {
-            world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 3000.0)),
-            frustum: EyeFrustum::symmetric(Rad(1.0), 1.0, 1.0, 1.0e6),
-            target: EyeTarget::default(),
-        }],
+        view: eye_view(
+            LatLon::new(40.577, -74.738),
+            0.0,
+            Matrix4::from_translation(Vector3::new(0.0, 0.0, 3000.0)),
+            EyeFrustum::symmetric(Rad(1.0), 1.0, 1.0, 1.0e6),
+        ),
+        depth: None,
         request_overscan: 1.0,
-        prefetch: None,
     }
 }
 
@@ -142,7 +136,7 @@ async fn drapes_beside(extra: &str) -> (usize, u32) {
     .expect("map");
     let mut built = 0;
     for step in 1..=80_u64 {
-        map.run_xr_frame(frame(16 * step)).expect("frame");
+        map.run_external_frame(frame(16 * step)).expect("frame");
         built = drapes(&map);
         if built > 0 {
             break;

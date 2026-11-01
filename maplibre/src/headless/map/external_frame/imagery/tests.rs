@@ -1,22 +1,20 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
-use cgmath::{Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Rad, Vector3};
 use image::{Rgba, RgbaImage};
 
 use crate::{
     coords::{LatLon, WorldTileCoords},
     headless::{
         create_headless_renderer,
-        map::{HeadlessMap, ProcessedLayers},
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            HeadlessMap, ProcessedLayers,
+        },
         HeadlessPlugin,
     },
     raster::{AvailableRasterLayerData, DefaultRasterTransferables, RasterPlugin},
-    render::{
-        camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-        RenderPlugin,
-    },
+    render::{camera::EyeFrustum, RenderPlugin},
     style::Style,
     terrain::{DefaultDemTransferables, TerrainPlugin},
 };
@@ -59,23 +57,17 @@ async fn render(projection: &str) -> Vec<u8> {
         .atan()
         .to_degrees();
     for tick in 0..12_u64 {
-        map.run_xr_frame(XrFrame {
+        map.run_external_frame(ExternalFrame {
             timestamp: std::time::Duration::from_millis(tick * 16),
             opaque_environment: true,
-            placement: ScenePlacement {
-                anchor: ExternalAnchor {
-                    position: LatLon::new(lat, lon),
-                    altitude_meters: 0.0,
-                },
-                world_from_scene: Matrix4::identity(),
-            },
-            eyes: vec![XrEye {
-                world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 130.0)),
-                frustum: EyeFrustum::symmetric(Rad(1.0), 1.0, 10.0, 50_000_000.0),
-                target: EyeTarget::default(),
-            }],
+            view: eye_view(
+                LatLon::new(lat, lon),
+                0.0,
+                Matrix4::from_translation(Vector3::new(0.0, 0.0, 130.0)),
+                EyeFrustum::symmetric(Rad(1.0), 1.0, 10.0, 50_000_000.0),
+            ),
+            depth: None,
             request_overscan: 1.0,
-            prefetch: None,
         })
         .expect("frame");
     }

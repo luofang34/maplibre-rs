@@ -22,6 +22,19 @@ impl HeadlessMap {
         }
     }
 
+    /// Resize the render attachments and viewport without discarding supplied tiles. The
+    /// display keeps the pixel ratio [`Self::set_pixel_ratio`] gave it, so the viewport is the
+    /// new size in layout pixels.
+    pub fn resize(&mut self, size: crate::window::PhysicalSize) {
+        let ratio = self
+            .map_context
+            .world
+            .resources
+            .get::<crate::sdf::provided::DisplayPixelRatio>()
+            .map_or(1.0, |ratio| f64::from(ratio.0));
+        self.map_context.resize(size, ratio);
+    }
+
     /// Alias for [`Self::head_texture`].
     pub fn color_texture(&self) -> Option<&wgpu::Texture> {
         self.head_texture()

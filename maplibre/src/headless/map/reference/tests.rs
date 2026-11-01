@@ -110,6 +110,16 @@ async fn a_camera_of_another_size_is_refused() {
 }
 
 #[tokio::test]
+async fn a_singular_camera_pose_is_refused() {
+    let mut map = prepared_map().await;
+    let target = ReferenceTarget::new(&map, intrinsics()).expect("target");
+    assert!(matches!(
+        target.draw(&mut map, anchor(), Matrix4::from_scale(0.0)),
+        Err(ReferenceError::SingularPose)
+    ));
+}
+
+#[tokio::test]
 async fn settle_frames_continue_the_map_clock() {
     let mut map = prepared_map().await;
     let before = map.frame_input_mut().timestamp;

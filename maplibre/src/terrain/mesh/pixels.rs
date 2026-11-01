@@ -6,22 +6,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use cgmath::{Deg, InnerSpace, Matrix4, SquareMatrix, Vector3};
+use cgmath::{Deg, InnerSpace, Matrix4, Vector3};
 use image::{Rgba, RgbaImage};
 
 use crate::{
     coords::{LatLon, WorldTileCoords},
     headless::{
         create_headless_renderer_with_settings,
-        map::{reference::read_texture_blocking, HeadlessMap, ProcessedLayers},
+        map::{
+            external_frame::{tests::eye_view, ExternalFrame},
+            reference::read_texture_blocking,
+            HeadlessMap, ProcessedLayers,
+        },
         HeadlessPlugin,
     },
     render::{
         camera::EyeFrustum,
         eventually::{Eventually, Eventually::Initialized},
         settings::{Msaa, RendererSettings},
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
         RenderPlugin,
     },
     style::Style,
@@ -192,26 +194,17 @@ impl Harness {
     fn draw(&mut self, anchor: LatLon, pose: Matrix4<f64>, fov: f64) {
         self.frame = self.frame.wrapping_add(1);
         self.map
-            .run_xr_frame(XrFrame {
+            .run_external_frame(ExternalFrame {
                 opaque_environment: false,
                 timestamp: Duration::from_millis(self.frame.wrapping_mul(16)),
-                placement: ScenePlacement {
-                    anchor: ExternalAnchor {
-                        position: anchor,
-                        altitude_meters: 0.0,
-                    },
-                    world_from_scene: Matrix4::identity(),
-                },
-                eyes: vec![XrEye {
-                    world_from_eye: pose,
-                    frustum: EyeFrustum::symmetric(Deg(fov).into(), 1.0, NEAR, FAR),
-                    target: EyeTarget {
-                        color: None,
-                        depth: Some(self.depth.create_view(&Default::default())),
-                    },
-                }],
+                view: eye_view(
+                    anchor,
+                    0.0,
+                    pose,
+                    EyeFrustum::symmetric(Deg(fov).into(), 1.0, NEAR, FAR),
+                ),
+                depth: Some(self.depth.create_view(&Default::default())),
                 request_overscan: 1.0,
-                prefetch: None,
             })
             .expect("terrain frame");
     }
