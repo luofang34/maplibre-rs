@@ -8,6 +8,10 @@
 - [User Guide](./user-guide/index.md)
 
 
+- [Examples](./examples/index.md)
+  - [Display a Globe with a Vector Map](./examples/display-a-globe-with-a-vector-map.md)
+
+
 - [Development Guide](./development-guide/index.md)
   - [How to Run Demos](./development-guide/how-to-run.md)
   - [Building Libraries](./development-guide/building-libraries.md)
