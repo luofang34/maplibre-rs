@@ -44,8 +44,6 @@ pub(crate) mod translation;
 mod upload_system;
 pub mod visibility;
 
-#[cfg(feature = "headless")]
-pub(crate) use depth::SymbolDepth;
 pub(crate) mod glyphs;
 pub mod tessellation;
 

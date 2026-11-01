@@ -22,12 +22,12 @@ impl HeadlessMap {
         }
     }
 
-    /// Alias for [`Self::head_texture`] matching multi-view color attachment accessors.
+    /// Alias for [`Self::head_texture`].
     pub fn color_texture(&self) -> Option<&wgpu::Texture> {
         self.head_texture()
     }
 
-    /// Alias for [`Self::head_texture_view`] matching multi-view color view accessors.
+    /// Alias for [`Self::head_texture_view`].
     pub fn color_texture_view(&self) -> Option<&wgpu::TextureView> {
         self.head_texture_view()
     }

@@ -6,11 +6,7 @@ use super::*;
 use crate::{
     coords::{LatLon, Zoom},
     projection::body::Body,
-    render::eye_covering::{CurrentViewSlot, ViewSlotId},
-    tcs::world::World,
 };
-
-
 
 #[test]
 fn orientation_3d_handles_steep_bank_vertical_pitch_and_inverted_attitudes() {
@@ -109,7 +105,6 @@ fn slope_aligned_ground_vehicle_and_mercator_transform_match_datum() {
         altitude_meters: 1.2,
         altitude_reference: AltitudeReference::OnGroundSlopeAligned,
         orientation: Orientation3d::from_heading_pitch_roll_degrees(0.0, 0.0, 0.0),
-        view_mask: ViewSlotMask::ALL,
     };
     assert!((vehicle.resolved_altitude_msl(430.0) - 431.2).abs() < 1e-12);
 
@@ -124,44 +119,4 @@ fn slope_aligned_ground_vehicle_and_mercator_transform_match_datum() {
 
     let merc = vehicle.model_to_mercator_world(Zoom::new(16.0), &body, 430.0, Some(normal_enu));
     assert!((merc.w.z - 431.2).abs() < 1e-9);
-}
-
-#[test]
-fn view_slot_mask_hides_ownship_in_cockpit_otw_while_showing_in_chase_slot() {
-    let otw_slot = ViewSlotId::from_raw(0);
-    let chase_slot = ViewSlotId::from_raw(1);
-    let sensor_slot = ViewSlotId::from_raw(2);
-
-    let ownship = Placement3d {
-        position: LatLon::new(47.45, 8.55),
-        altitude_meters: 1_200.0,
-        altitude_reference: AltitudeReference::AboveMsl,
-        orientation: Orientation3d::IDENTITY,
-        view_mask: ViewSlotMask::ALL.without(otw_slot),
-    };
-    let sensor_reticle_3d = Placement3d {
-        view_mask: ViewSlotMask::only(sensor_slot),
-        ..ownship
-    };
-
-    let mut world = World::default();
-    assert!(ownship.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(otw_slot)));
-    assert!(
-        !ownship.is_visible_in_world(&world),
-        "ownship hidden in Cockpit OTW"
-    );
-    assert!(!sensor_reticle_3d.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(chase_slot)));
-    assert!(
-        ownship.is_visible_in_world(&world),
-        "ownship visible in Chase camera"
-    );
-    assert!(!sensor_reticle_3d.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(sensor_slot)));
-    assert!(ownship.is_visible_in_world(&world));
-    assert!(sensor_reticle_3d.is_visible_in_world(&world));
 }

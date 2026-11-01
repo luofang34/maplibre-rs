@@ -41,13 +41,14 @@ mod error;
 #[cfg(test)]
 mod injected_loader;
 mod labels;
-pub mod multi_view;
 pub use error::HeadlessMapOperationError;
 mod processed;
 mod provided_images;
 mod raster;
 pub mod readback;
 pub mod reference;
+#[cfg(test)]
+mod shared_assets;
 mod signals;
 mod style;
 #[cfg(test)]
@@ -61,10 +62,6 @@ mod terrain_patch;
 mod vertical_perspective;
 mod xr;
 
-pub use multi_view::{
-    CoveringPolicy, MultiViewError, MultiViewFrame, SlotView, ViewSlotConfig, ViewSlotEntry,
-    ViewSlotId,
-};
 pub use processed::{
     process_geojson_layers, process_geojson_layers_with_atlas, process_tile_layers,
     process_tile_layers_with_atlas, ProcessedLayers, SymbolLayer, VectorLayer,

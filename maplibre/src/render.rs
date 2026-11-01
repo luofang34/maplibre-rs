@@ -418,6 +418,6 @@ impl Renderer {
 mod render_plugin;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;
-pub use placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask};
+pub use placement_3d::{AltitudeReference, Orientation3d, Placement3d};
 pub use render_plugin::{draw_graph, main_graph, MaskPipeline, RenderPlugin};
 pub(crate) mod tile_memory;

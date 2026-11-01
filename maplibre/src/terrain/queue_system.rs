@@ -260,7 +260,7 @@ fn loaded_content(world: &World) -> LoadedContent<'_> {
 mod tests;
 
 fn acquire_drapes(
-    (specs, extra_retained): (&[TargetSpec], Option<&HashSet<WorldTileCoords>>),
+    specs: &[TargetSpec],
     prints: &[u64],
     ready: &[bool],
     memory: MemoryBudget,
@@ -268,13 +268,9 @@ fn acquire_drapes(
     terrain: &mut TerrainResources,
     device: &wgpu::Device,
 ) -> (Vec<bool>, Vec<Option<WorldTileCoords>>, bool) {
-    let keep = covering::retained_textures(
-        specs
-            .iter()
-            .map(|spec| spec.coords)
-            .chain(extra_retained.into_iter().flatten().copied()),
-        |coords| terrain.drape_texture(coords).is_some(),
-    );
+    let keep = covering::retained_textures(specs.iter().map(|spec| spec.coords), |coords| {
+        terrain.drape_texture(coords).is_some()
+    });
     terrain.retain_drapes(&keep);
     // Unready tiles keep their last valid texture or a background surface.
     if memory.is_tight() {
@@ -485,10 +481,6 @@ fn prepare_drapes(
     } else {
         limit
     };
-    let extra_retained = world
-        .resources
-        .get::<crate::render::eye_covering::SlotResidencyFloor>()
-        .map(|floor| floor.retained_drapes.clone());
     let (redraw, drape_sources, deferred) = {
         let Some(Initialized(terrain)) = world.resources.get_mut::<Eventually<TerrainResources>>()
         else {
@@ -496,7 +488,7 @@ fn prepare_drapes(
         };
         terrain.ensure_scratch(device);
         acquire_drapes(
-            (specs, extra_retained.as_ref()),
+            specs,
             &prints,
             &ready,
             memory,

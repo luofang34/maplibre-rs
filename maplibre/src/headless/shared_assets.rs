@@ -9,7 +9,7 @@
 //! - Compiled [`wgpu::ShaderModule`], canonical [`wgpu::BindGroupLayout`], and
 //!   [`wgpu::RenderPipeline`] objects via [`SharedPipelines`].
 //!
-//! Each map's `Style`, `World`, `GeoJsonSource`s, and `OverlayMesh`es remain strictly isolated.
+//! Each map's `Style`, `World`, and `GeoJsonSource`s remain strictly isolated.
 
 use crate::{
     io::resource_loader::SharedLoader, render::resource::SharedPipelines, sdf::assets::AssetCache,

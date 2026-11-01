@@ -1,21 +1,157 @@
+//! Isolated maps on one GPU share decoded tiles and pipelines, and nothing of their scenes.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use super::{tests::*, *};
+use image::ImageEncoder;
+
 use crate::{
     background::BackgroundPlugin,
-    headless::{create_headless_renderer_on_host_gpu_with_shared_assets, SharedMapAssets},
-    io::resource_loader::SharedLoader,
-    overlay::OverlayPlugin,
+    coords::WorldTileCoords,
+    headless::{
+        create_headless_renderer_on_host_gpu_with_shared_assets, map::HeadlessMap, SharedMapAssets,
+    },
+    io::{
+        resource_loader::SharedLoader,
+        source_client::{HttpClient, SourceFetchError},
+    },
     raster::{DefaultRasterTransferables, RasterPlugin},
     render::{
+        host_gpu::HostGpu,
         settings::{BufferPoolSizes, Msaa, RendererSettings},
         RenderPlugin,
     },
+    style::Style,
     terrain::{transferables::DefaultDemTransferables, DemTileComponent, TerrainPlugin},
     vector::{DefaultVectorTransferables, VectorPlugin},
 };
+
+#[derive(Clone, Default)]
+struct CountingTileClient {
+    fetches: Arc<Mutex<HashMap<String, usize>>>,
+}
+
+impl CountingTileClient {
+    fn total_fetches(&self) -> usize {
+        self.fetches.lock().expect("lock").values().sum()
+    }
+
+    fn max_fetches_for_any_url(&self) -> usize {
+        self.fetches
+            .lock()
+            .expect("lock")
+            .values()
+            .copied()
+            .max()
+            .unwrap_or(0)
+    }
+}
+
+#[cfg_attr(not(feature = "thread-safe-futures"), async_trait::async_trait(?Send))]
+#[cfg_attr(feature = "thread-safe-futures", async_trait::async_trait)]
+impl HttpClient for CountingTileClient {
+    async fn fetch(&self, url: &str) -> Result<Vec<u8>, SourceFetchError> {
+        *self
+            .fetches
+            .lock()
+            .expect("lock")
+            .entry(url.to_owned())
+            .or_insert(0) += 1;
+
+        let rgba = if url.contains("dem.invalid") {
+            // Terrarium encoding: (R * 256 + G + B / 256) - 32768 -> ~492 m MSL
+            [129, 236, 0, 255]
+        } else {
+            [40, 120, 200, 255]
+        };
+        let mut pixels = Vec::with_capacity(16 * 16 * 4);
+        for _ in 0..(16 * 16) {
+            pixels.extend_from_slice(&rgba);
+        }
+        let mut bytes = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(&pixels, 16, 16, image::ExtendedColorType::Rgba8)
+            .expect("encode PNG");
+        Ok(bytes)
+    }
+}
+
+async fn host_gpu() -> Option<HostGpu> {
+    let instance = wgpu::Instance::default();
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions::default())
+        .await
+        .ok()?;
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor::default())
+        .await
+        .ok()?;
+    Some(HostGpu {
+        instance,
+        adapter,
+        device,
+        queue,
+    })
+}
+
+fn terrain_raster_style(bg_hex: &str) -> Style {
+    serde_json::from_value(serde_json::json!({
+        "version": 8,
+        "projection": { "type": "vertical-perspective" },
+        "center": [8.0, 47.0],
+        "zoom": 6.0,
+        "sources": {
+            "dem": {
+                "type": "raster-dem",
+                "tiles": ["https://dem.invalid/{z}/{x}/{y}.png"],
+                "tileSize": 256,
+                "maxzoom": 8,
+                "encoding": "terrarium"
+            },
+            "imagery": {
+                "type": "raster",
+                "tiles": ["https://imagery.invalid/{z}/{x}/{y}.png"],
+                "tileSize": 256,
+                "maxzoom": 8
+            },
+            "tracks": {
+                "type": "geojson",
+                "data": { "type": "FeatureCollection", "features": [] }
+            }
+        },
+        "terrain": { "source": "dem", "exaggeration": 1.0 },
+        "layers": [
+            { "id": "bg", "type": "background", "paint": { "background-color": bg_hex } },
+            { "id": "imagery", "type": "raster", "source": "imagery" },
+            {
+                "id": "track-line",
+                "type": "line",
+                "source": "tracks",
+                "paint": { "line-color": "#ffaa00", "line-width": 3.0 }
+            }
+        ]
+    }))
+    .expect("valid terrain style")
+}
+
+fn loaded_dem_coords(map: &HeadlessMap) -> HashSet<WorldTileCoords> {
+    let tiles = &map.world().tiles;
+    tiles
+        .tiles
+        .values()
+        .map(|tile| tile.coords)
+        .filter(|&coords| {
+            matches!(
+                tiles.query::<&DemTileComponent>(coords),
+                Some(DemTileComponent::Loaded(_))
+            )
+        })
+        .collect()
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated_worlds() {
@@ -50,7 +186,6 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
                 Box::new(VectorPlugin::<DefaultVectorTransferables>::default()),
                 Box::new(RasterPlugin::<DefaultRasterTransferables>::default()),
                 Box::new(TerrainPlugin::<DefaultDemTransferables>::default()),
-                Box::new(OverlayPlugin),
             ],
         )
         .expect("domain map")
@@ -104,7 +239,7 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
         "decoded DemTile data must match across domains"
     );
 
-    // Verify strict domain isolation for Style, GeoJsonSource, and OverlayMesh.
+    // Verify strict domain isolation for Style and GeoJsonSource.
     truth_map
         .mutate_style(|style| style.set_paint_property("bg", "background-color", "#00ff00".into()))
         .expect("mutate truth style");
@@ -123,7 +258,6 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
             .into()),
         )
         .expect("set truth geojson");
-    truth_map.set_overlay(fullscreen_overlay(96, 64, [0.0, 0.0, 1.0, 1.0]));
 
     truth_map.run_frame().expect("truth isolated frame");
     belief_map.run_frame().expect("belief isolated frame");
@@ -142,6 +276,6 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
     .expect("read belief");
     assert_ne!(
         truth_px, belief_px,
-        "TruthScene overlay/GeoJSON/style mutations must never leak into BeliefAvionics"
+        "TruthScene GeoJSON/style mutations must never leak into BeliefAvionics"
     );
 }
