@@ -3,7 +3,7 @@
 Display a 3D spherical globe with vector tile features using the `globe` projection.
 
 <div class="map-container" style="position: relative; width: 100%; height: 520px; border-radius: 8px; overflow: hidden; margin: 1.5rem 0; border: 1px solid #30363d; background: #0b0e14;">
-  <iframe src="./demo/index.html?zoom=2.0" style="width: 100%; height: 100%; border: none; display: block;" title="MapLibre Globe Vector Map" allow="fullscreen"></iframe>
+  <iframe src="./demo/index.html?lat=0&lon=0&zoom=2" style="width: 100%; height: 100%; border: none; display: block;" title="MapLibre Globe Vector Map" allow="fullscreen"></iframe>
   <div style="position: absolute; bottom: 12px; left: 12px; background: rgba(13, 17, 23, 0.85); color: #c9d1d9; padding: 6px 12px; border-radius: 6px; font-size: 12px; backdrop-filter: blur(4px); pointer-events: none; border: 1px solid rgba(255,255,255,0.1);">
     <span>Drag to orbit • Scroll to zoom • Right-click drag to pitch/rotate</span>
   </div>

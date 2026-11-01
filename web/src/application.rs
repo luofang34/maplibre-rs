@@ -112,6 +112,9 @@ pub async fn run_map(
                     RendererBuilder::new(),
                     plugins,
                 )?;
+                if style.terrain.is_some() || style.pitch.is_some_and(|pitch| pitch > 60.0) {
+                    map.set_max_pitch_degrees(style.pitch.unwrap_or(0.0).max(85.0));
+                }
                 host.configure(&mut map);
                 Ok::<_, JSError>(map)
             },

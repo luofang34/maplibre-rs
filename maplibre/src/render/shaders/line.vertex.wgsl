@@ -151,9 +151,17 @@ fn main(
         center.z += max(abs(center.z), 1e-8) * TERRAIN_LINE_DEPTH_BIAS;
     } else {
         // The extrusion lies on the map, so it shrinks with distance as the ground does.
-        let offset = tangent * (moved * line_scale.y / max(extent, 1e-6));
+        let line_units =
+            line_scale.y * project_symbol_scale((position + layer_translate).y, tile_mercator_coords);
+        let offset = tangent * (moved * line_units / max(extent, 1e-6));
         center = vec4<f32>(center.xy + offset.xy, 0.0, center.w + offset.w);
     }
+
+    let dash_scale = line_scale.y * select(
+        mix(1.0, projection.globe_circle.x, projection.transition_and_padding.x),
+        1.0,
+        spatial || ground.on_terrain,
+    );
 
     // A line with a gradient counts its dashes along the progress of the whole line, scaled to
     // a range of 32767, in widths rounded down: a pattern repeats every `sum * 16 * floor(width)`
@@ -161,7 +169,7 @@ fn main(
     let floor_width = max(floor(select(line_width, feature_width, per_feature)), 1.0);
     let gradient_dash = vec2<f32>(
         path.z / max(color.x, 1e-6) * 32767.0 / (16.0 * floor_width),
-        color.x / max(line_scale.y, 1e-6) * 16.0 * floor_width / 32767.0,
+        color.x / max(dash_scale, 1e-6) * 16.0 * floor_width / 32767.0,
     );
     return VertexOutput(
         center,
@@ -175,7 +183,7 @@ fn main(
         position.x,
         clip_antimeridian,
         select(
-            vec2<f32>(path.z / max(line_scale.y * dash_unit, 1e-6), dash_unit),
+            vec2<f32>(path.z / max(dash_scale * dash_unit, 1e-6), dash_unit),
             gradient_dash,
             line_style.w > 0.5,
         ),

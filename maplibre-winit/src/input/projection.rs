@@ -82,7 +82,7 @@ pub fn pan_globe_by_pixels(
         Point2::new(center.x, center.y),
         delta,
     ) {
-        apply_pan_update(view_state, update);
+        apply_pan_update(view_state, camera.center().latitude, update);
     }
     true
 }
@@ -162,9 +162,11 @@ pub fn zoom_globe_around_pixel(
     true
 }
 
-fn apply_pan_update(view_state: &mut ViewState, update: GlobePanUpdate) {
-    let zoom = view_state.zoom().value() + update.zoom_adjustment;
-    set_center(view_state, update.center, zoom);
+fn apply_pan_update(view_state: &mut ViewState, current_latitude: f64, update: GlobePanUpdate) {
+    let reachable = LatLon::from_mercator(update.center.to_mercator());
+    let zoom = view_state.zoom().value()
+        + maplibre::projection::globe::globe_zoom_adjustment(current_latitude, reachable.latitude);
+    set_center(view_state, reachable, zoom);
 }
 
 fn set_center(view_state: &mut ViewState, center: LatLon, zoom: f64) {

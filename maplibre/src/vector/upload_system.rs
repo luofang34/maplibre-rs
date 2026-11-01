@@ -1,15 +1,11 @@
 //! Uploads data to the GPU which is needed for rendering.
 
-use std::collections::HashSet;
-
 use crate::{
     context::MapContext,
-    io::tile_sources::TileKind,
     render::{
         eventually::{Eventually, Eventually::Initialized},
         memory_budget::UPLOADS_PER_FRAME,
         shaders::{FillShaderFeatureMetadata, Vec4f32},
-        tile_view_pattern::WgpuTileViewPattern,
         Renderer,
     },
     style::{layer::LayerPaint, Style},
@@ -51,6 +47,12 @@ pub fn upload_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
+    let Some(pool_state) = world.resources.get::<Eventually<VectorBufferPool>>() else {
+        return Ok(());
+    };
+    if !matches!(pool_state, Initialized(_)) {
+        return Err(SystemError::Dependencies);
+    }
     if settings.buffer_pools.is_empty()
         || crate::render::eye_covering::EyeInFrame::reuses_content(world)
     {
@@ -58,16 +60,8 @@ pub fn upload_system(
     }
     let (paint_frame, previous_paint) = frame_paint(world, style, view_state);
     let refresh_paint = previous_paint != Some(paint_frame);
-    let Some(Initialized(pattern)) = world.resources.get::<Eventually<WgpuTileViewPattern>>()
-    else {
-        return Err(SystemError::Dependencies);
-    };
-    let source_tiles = if style.terrain.is_some() {
-        sources::terrain_sources(world, style)
-    } else {
-        sources_for_upload(pattern)
-    };
-    let painted_tiles = painted_tiles(pattern, &source_tiles);
+    let (source_tiles, painted_tiles) =
+        sources::frame_sources_and_painted(world, style, view_state)?;
     let (spatial, changed) = super::structures::for_frame(world, style, &painted_tiles);
     let Some(Initialized(buffer_pool)) = world.resources.get_mut::<Eventually<VectorBufferPool>>()
     else {
@@ -85,7 +79,7 @@ pub fn upload_system(
     if changed {
         super::structures::refresh_gpu(buffer_pool, queue, &spatial, &world.tiles);
     }
-    upload_tessellated_layer(
+    let deferred = upload_tessellated_layer(
         buffer_pool,
         queue,
         &mut world.tiles,
@@ -94,6 +88,9 @@ pub fn upload_system(
         &spatial,
         paint_frame,
     );
+    if deferred {
+        crate::render::frame_signals::keep_animating(world);
+    }
     Ok(())
 }
 
@@ -122,43 +119,6 @@ fn frame_paint(
     let previous_paint = world.resources.get::<VectorPaintFrame>().copied();
     world.resources.insert(paint_frame);
     (paint_frame, previous_paint)
-}
-
-fn painted_tiles(
-    pattern: &WgpuTileViewPattern,
-    source_tiles: &[crate::coords::WorldTileCoords],
-) -> Vec<crate::coords::WorldTileCoords> {
-    let mut painted_tiles = source_tiles.to_vec();
-    let mut seen: HashSet<_> = painted_tiles.iter().copied().collect();
-    for tile in pattern.iter() {
-        tile.render_kind(TileKind::Vector, |shape| {
-            if seen.insert(shape.coords()) {
-                painted_tiles.push(shape.coords());
-            }
-        });
-    }
-    painted_tiles
-}
-
-fn sources_for_upload(
-    tile_view_pattern: &WgpuTileViewPattern,
-) -> Vec<crate::coords::WorldTileCoords> {
-    let mut source_tiles = Vec::new();
-    let mut seen = HashSet::new();
-    for view_tile in tile_view_pattern.iter() {
-        // The view tile itself is uploaded whether or not the frame draws it yet: a tile
-        // counts as available only once it is in the pool, so the frame draws a stand-in
-        // until this upload has happened.
-        if seen.insert(view_tile.coords()) {
-            source_tiles.push(view_tile.coords());
-        }
-        view_tile.render_kind(TileKind::Vector, |shape| {
-            if seen.insert(shape.coords()) {
-                source_tiles.push(shape.coords());
-            }
-        });
-    }
-    source_tiles
 }
 
 fn refresh_layer_paint(
@@ -211,13 +171,10 @@ fn upload_tessellated_layer(
     source_tiles: Vec<crate::coords::WorldTileCoords>,
     spatial: &[super::structures::SpatialBuffer],
     paint: VectorPaintFrame,
-) {
+) -> bool {
     let mut uploaded_tiles = 0;
     let mut bytes = crate::render::memory_budget::UploadBudget::new(16 << 20);
     for coords in source_tiles {
-        if uploaded_tiles >= UPLOADS_PER_FRAME {
-            break;
-        }
         super::content::ensure(tiles, coords);
         let Some((layers, pending)) = tiles.query_mut::<(
             &mut VectorLayerBucketComponent,
@@ -253,8 +210,8 @@ fn upload_tessellated_layer(
             if bucket.buffer.buffer.indices.is_empty() {
                 buffer_pool.remove_layer(coords, &style_layer.id);
             } else {
-                if !bytes.take(upload_size(bucket)) {
-                    return;
+                if uploaded_tiles >= UPLOADS_PER_FRAME || !bytes.take(upload_size(bucket)) {
+                    return true;
                 }
                 if !upload_bucket(buffer_pool, queue, style_layer, bucket, spatial, paint) {
                     continue;
@@ -269,6 +226,7 @@ fn upload_tessellated_layer(
             uploaded_tiles += 1;
         }
     }
+    false
 }
 
 fn upload_size(bucket: &AvailableVectorLayerBucket) -> usize {

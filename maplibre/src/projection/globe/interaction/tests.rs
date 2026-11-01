@@ -123,3 +123,18 @@ fn on_sphere_grab_uses_requested_anchor() {
 
     assert_ne!(dragged.center.longitude, centered.center.longitude);
 }
+
+#[test]
+fn polar_anchor_clamps_latitude_to_mercator_limit_with_bounded_zoom_adjustment() {
+    let update = pan_center_to_anchor(
+        LatLon::new(75.0, 85.0),
+        0.0,
+        LatLon::new(90.0, 85.0),
+        LatLon::new(75.0, 85.0),
+    );
+
+    assert!(update.center.latitude <= super::MAX_VALID_LATITUDE);
+    assert!((update.center.latitude - super::MAX_VALID_LATITUDE).abs() < 1e-9);
+    assert!(update.zoom_adjustment.is_finite());
+    assert!(update.zoom_adjustment > -2.0);
+}

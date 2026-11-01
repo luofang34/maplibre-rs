@@ -89,7 +89,7 @@ async fn empty_tiles_do_not_starve_later_geometry_uploads() {
             });
     }
     let wanted = *coords.last().expect("geometry tile");
-    super::upload_tessellated_layer(
+    let deferred = super::upload_tessellated_layer(
         &mut pool,
         &renderer.queue,
         &mut tiles,
@@ -102,11 +102,150 @@ async fn empty_tiles_do_not_starve_later_geometry_uploads() {
             light: Default::default(),
         },
     );
+    assert!(!deferred);
     assert!(
         pool.get_loaded_style_layers_at(wanted)
             .is_some_and(|layers| layers.contains("land")),
         "empty buckets must leave upload slots for later geometry"
     );
+}
+
+#[cfg(feature = "headless")]
+#[tokio::test]
+async fn deferred_uploads_keep_parent_stand_in_and_flag_animation() {
+    use crate::{
+        coords::{ViewRegion, WorldTileCoords, Zoom},
+        headless::create_headless_renderer,
+        io::tile_sources::TileKind,
+        render::{
+            eventually::Eventually,
+            memory_budget::UPLOADS_PER_FRAME,
+            resource::BackingBufferDescriptor,
+            tile_view_pattern::{ViewTileSources, WgpuTileViewPattern},
+            ShaderVertex,
+        },
+        style::Style,
+        tcs::world::World,
+        vector::{
+            AvailableVectorLayerBucket, VectorBufferPool, VectorLayerBucket,
+            VectorLayerBucketComponent,
+        },
+    };
+    let (_, renderer) = create_headless_renderer(64, 64, None)
+        .await
+        .expect("renderer");
+    let mut world = World::default();
+    let style: Style = serde_json::from_str(
+        r##"{"version":8,"sources":{},"layers":[{"id":"land","type":"fill","paint":{"fill-color":"#718474"}}]}"##,
+    )
+    .expect("style");
+    let make_bucket = |coords: WorldTileCoords| VectorLayerBucketComponent {
+        failed: false,
+        done: true,
+        overscaled_zoom: 0,
+        layers: vec![VectorLayerBucket::AvailableLayer(
+            AvailableVectorLayerBucket {
+                coords,
+                source_layer: "land".into(),
+                style_layer_id: "land".into(),
+                buffer: lyon::tessellation::VertexBuffers {
+                    vertices: vec![ShaderVertex::default(); 3],
+                    indices: vec![0, 1, 2],
+                }
+                .into(),
+                feature_indices: vec![3],
+                feature_colors: Vec::new(),
+                feature_sort_keys: Vec::new(),
+            },
+        )],
+    };
+
+    let parent = WorldTileCoords {
+        x: 0,
+        y: 0,
+        z: ZoomLevel::new(0),
+    };
+    world
+        .tiles
+        .spawn_mut(parent)
+        .expect("parent")
+        .insert(make_bucket(parent));
+
+    let children: Vec<_> = (0..(UPLOADS_PER_FRAME + 2))
+        .map(|x| WorldTileCoords {
+            x: x as i32,
+            y: 0,
+            z: ZoomLevel::new(4),
+        })
+        .collect();
+    for &child in &children {
+        world
+            .tiles
+            .spawn_mut(child)
+            .expect("child")
+            .insert(make_bucket(child));
+    }
+
+    let mut pool = VectorBufferPool::from_device(&renderer.device);
+    let paint = super::VectorPaintFrame {
+        zoom: 4.0,
+        bearing: 0.0,
+        light: Default::default(),
+    };
+    // Upload parent first, as an earlier low-zoom frame did.
+    assert!(!super::upload_tessellated_layer(
+        &mut pool,
+        &renderer.queue,
+        &mut world.tiles,
+        &style,
+        vec![parent],
+        &[],
+        paint,
+    ));
+
+    // Zooming in finishes more children than UPLOADS_PER_FRAME allows in one frame.
+    let deferred = super::upload_tessellated_layer(
+        &mut pool,
+        &renderer.queue,
+        &mut world.tiles,
+        &style,
+        children.clone(),
+        &[],
+        paint,
+    );
+    assert!(deferred, "remaining children must request another frame");
+
+    world.resources.insert(Eventually::Initialized(pool));
+    world
+        .resources
+        .get_or_init_mut::<ViewTileSources>()
+        .add::<crate::vector::VectorTilesDone>(TileKind::Vector);
+
+    let pattern_buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("pattern"),
+        size: 4096,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let pattern = WgpuTileViewPattern::new(BackingBufferDescriptor::new(pattern_buffer, 4096));
+    let region = ViewRegion::from_tiles(children.clone(), ZoomLevel::new(4), children.len());
+    let sources = world.resources.get::<ViewTileSources>().expect("sources");
+    let view_tiles = pattern.generate_pattern(&region, sources, &[], Zoom::new(4.0), &world);
+
+    let mut deferred_shapes = Vec::new();
+    for (index, tile) in view_tiles.iter().enumerate() {
+        tile.render_kind(TileKind::Vector, |shape| {
+            assert!(
+                crate::vector::geometry_uploaded(shape.coords(), &world),
+                "tile {index} selected un-uploaded geometry {:?}",
+                shape.coords()
+            );
+            if index >= UPLOADS_PER_FRAME {
+                deferred_shapes.push(shape.coords());
+            }
+        });
+    }
+    assert_eq!(deferred_shapes, vec![parent]);
 }
 
 #[test]

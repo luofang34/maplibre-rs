@@ -117,3 +117,62 @@ fn free_symbol_scale_survives_precise_globe_projection_without_changing_world_up
         );
     }
 }
+
+#[test]
+fn polar_camera_pan_preserves_globe_label_tile_unit_scale() {
+    let style = Style {
+        projection: Some(ProjectionSpecification {
+            projection_type: ProjectionType::Globe,
+        }),
+        ..Default::default()
+    };
+    let make_view = |center_lat: f64| {
+        let zoom = 2.0 + center_lat.to_radians().cos().log2();
+        ViewState::new(
+            PhysicalSize::new(800, 600).expect("viewport"),
+            WorldCoords::from_lat_lon(LatLon::new(center_lat, 60.0), Zoom::new(zoom)),
+            Zoom::new(zoom),
+            cgmath::Deg(0.0),
+            cgmath::Deg(36.869_897_645_844_02),
+        )
+    };
+    let uniforms = SymbolUniforms::new(&SymbolPaint::default(), 2.0, [1, 1]);
+    let coords = WorldTileCoords {
+        x: 1,
+        y: 0,
+        z: ZoomLevel::new(1),
+    };
+    // Anchor near the Arctic Circle (~66.56N).
+    let anchor = [2048.0, 2248.0];
+
+    let equator_view = make_view(0.0);
+    let equator_proj = projection_data_for_view(&style, &equator_view).expect("equator projection");
+    let equator_units = Placement {
+        coords,
+        anchor,
+        elevation: 0.0,
+        view: &equator_view,
+        projection: &equator_proj,
+        uniforms: &uniforms,
+    }
+    .tile_units();
+
+    for polar_lat in [60.0, 75.0, 84.0] {
+        let polar_view = make_view(polar_lat);
+        let polar_proj = projection_data_for_view(&style, &polar_view).expect("polar projection");
+        let polar_units = Placement {
+            coords,
+            anchor,
+            elevation: 0.0,
+            view: &polar_view,
+            projection: &polar_proj,
+            uniforms: &uniforms,
+        }
+        .tile_units();
+        let ratio = polar_units / equator_units;
+        assert!(
+            (ratio - 1.0).abs() < 1e-4,
+            "polar pan to {polar_lat}N scaled label tile units by {ratio}"
+        );
+    }
+}

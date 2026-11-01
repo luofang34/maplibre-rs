@@ -128,3 +128,28 @@ fn a_free_camera_is_dragged_and_zoomed_by_its_pose() {
         "the zoom halved the free camera's distance"
     );
 }
+
+#[test]
+fn polar_drag_preserves_globe_radius_pixels_at_both_poles() {
+    for delta_y in [25.0, -25.0] {
+        let (style, mut view) = globe_view(1.8);
+        let initial_radius = active_globe_camera(&style, &view)
+            .expect("initial globe camera")
+            .globe_radius_pixels();
+        for step in 0..40 {
+            assert!(super::pan_globe_by_pixels(
+                &style,
+                &mut view,
+                Vector2::new(400.0, 200.0 + f64::from(step) * 2.0),
+                Vector2::new(0.0, delta_y),
+            ));
+        }
+        let after_radius = active_globe_camera(&style, &view)
+            .expect("polar globe camera")
+            .globe_radius_pixels();
+        assert!(
+            (after_radius / initial_radius - 1.0).abs() < 1e-9,
+            "delta_y={delta_y}: radius drifted from {initial_radius} to {after_radius}"
+        );
+    }
+}

@@ -148,6 +148,11 @@ where
         self.max_pitch = max_pitch;
     }
 
+    /// Sets the largest pitch the camera accepts, in degrees.
+    pub fn set_max_pitch_degrees(&mut self, degrees: f64) {
+        self.set_max_pitch(cgmath::Deg(degrees));
+    }
+
     /// Sets the direction towards the sun, as [`MapContext::set_sun_direction`].
     #[cfg(feature = "experimental")]
     pub fn set_sun_direction(&mut self, sun: Option<crate::celestial::EcefDirection>) {

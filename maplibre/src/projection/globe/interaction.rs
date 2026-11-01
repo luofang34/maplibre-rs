@@ -166,7 +166,10 @@ pub fn pan_center_to_anchor(
     let orientation = orientation_from_lat_lon_bearing(current_center, bearing_degrees) * delta;
     let rotated = lat_lon_bearing_from_orientation(orientation);
     let center = LatLon::new(
-        rotated.center.latitude.clamp(-90.0, 90.0),
+        rotated
+            .center
+            .latitude
+            .clamp(-MAX_VALID_LATITUDE, MAX_VALID_LATITUDE),
         wrap_longitude(rotated.center.longitude),
     );
 

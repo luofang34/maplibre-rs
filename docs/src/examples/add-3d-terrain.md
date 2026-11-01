@@ -51,7 +51,7 @@ The style specification configures a `raster-dem` elevation source and attaches 
   ],
   "terrain": {
     "source": "terrainSource",
-    "exaggeration": 1.0
+    "exaggeration": 1.5
   },
   "center": [11.39085, 47.27574],
   "zoom": 12.0,
@@ -97,7 +97,8 @@ pub fn create_terrain_map<E: maplibre::environment::Environment>(
         Box::new(TerrainPlugin::default()),
     ];
 
-    let map = Map::new(style, kernel, plugins)?;
+    let mut map = Map::new(style, kernel, plugins)?;
+    map.set_max_pitch_degrees(85.0);
     Ok(map)
 }
 ```

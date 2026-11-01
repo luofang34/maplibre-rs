@@ -139,12 +139,17 @@ impl<Q: Queue<B>, B> TileViewPattern<Q, B> {
             raster_coverings.to_vec()
         };
 
+        let vector_availability = (
+            sources.of_kind(TileKind::Vector),
+            crate::vector::UploadedVectorGeometry::for_world(world),
+        );
+
         for seen in view_region.copies() {
             let Some((coords, wrap)) = seen.wrapped() else {
                 continue;
             };
             let mut vector = source_shapes(
-                &sources.of_kind(TileKind::Vector),
+                &vector_availability,
                 coords,
                 zoom,
                 world,

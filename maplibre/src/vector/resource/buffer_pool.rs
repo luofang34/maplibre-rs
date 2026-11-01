@@ -138,6 +138,11 @@ impl<Q: Queue<B>, B, V: Pod, I: Pod, TM: Pod, FM: Pod> BufferPool<Q, B, V, I, TM
         self.revision = self.revision.wrapping_add(1);
     }
 
+    /// Whether the pool holds non-zero vertex and index backing capacity.
+    pub fn has_capacity(&self) -> bool {
+        self.vertices.inner_size > 0 && self.indices.inner_size > 0
+    }
+
     /// Releases GPU geometry when the tile data and its glyph atlas leave the CPU cache.
     pub fn remove_tile(&mut self, coords: WorldTileCoords) {
         self.pattern_runs.retain(|(tile, _), _| *tile != coords);

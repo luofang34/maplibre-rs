@@ -32,7 +32,6 @@ use crate::{
         resource::BufferPool,
         resource_system::resource_system,
         tessellation::{IndexDataType, OverAlignedVertexBuffer},
-        upload_system::upload_system,
     },
 };
 
@@ -115,7 +114,7 @@ impl<T: VectorTransferables> Default for VectorPlugin<T> {
 /// A vector tile counts as available once the worker has finished it; the frame's own tiles
 /// and their stand-ins are chosen from these, and uploaded from there.
 #[derive(Default)]
-struct VectorTilesDone;
+pub(crate) struct VectorTilesDone;
 
 impl HasTile for VectorTilesDone {
     fn has_tile(&self, coords: WorldTileCoords, world: &World) -> bool {
@@ -145,6 +144,9 @@ pub fn geometry_uploaded(coords: WorldTileCoords, world: &World) -> bool {
     }
     match world.resources.get::<Eventually<VectorBufferPool>>() {
         Some(Eventually::Initialized(pool)) => {
+            if !pool.has_capacity() {
+                return true;
+            }
             let loaded = pool.get_loaded_style_layers_at(coords).unwrap_or_default();
             buckets.layers.iter().all(|layer| match layer {
                 VectorLayerBucket::AvailableLayer(bucket) => {
@@ -155,6 +157,27 @@ pub fn geometry_uploaded(coords: WorldTileCoords, world: &World) -> bool {
             })
         }
         _ => false,
+    }
+}
+
+/// Checks that a tile's vector geometry has reached the active GPU buffer pool.
+pub(crate) struct UploadedVectorGeometry {
+    check_gpu: bool,
+}
+
+impl UploadedVectorGeometry {
+    pub(crate) fn for_world(world: &World) -> Self {
+        let check_gpu = matches!(
+            world.resources.get::<Eventually<VectorBufferPool>>(),
+            Some(Eventually::Initialized(pool)) if pool.has_capacity()
+        );
+        Self { check_gpu }
+    }
+}
+
+impl HasTile for UploadedVectorGeometry {
+    fn has_tile(&self, coords: WorldTileCoords, world: &World) -> bool {
+        !self.check_gpu || geometry_uploaded(coords, world)
     }
 }
 
@@ -188,7 +211,6 @@ impl<E: Environment, T: VectorTransferables> Plugin<E> for VectorPlugin<T> {
         );
 
         schedule.add_system_to_stage(RenderStageLabel::Prepare, resource_system);
-        schedule.add_system_to_stage(RenderStageLabel::Queue, upload_system);
         schedule.add_system_to_stage(RenderStageLabel::Queue, queue_system);
     }
 }
