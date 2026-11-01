@@ -22,7 +22,7 @@ pub enum ViewSource {
     /// The map's own camera, steered by the gesture handlers and the pose API.
     #[default]
     MapView,
-    /// An eye supplied by the host, for head tracking or one eye of a stereo pair.
+    /// An eye supplied by the host.
     External(ExternalView),
 }
 

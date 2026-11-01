@@ -1,9 +1,9 @@
 //! Bounds how many tiles are being fetched and processed at once.
 //!
-//! A covering can ask for hundreds of tiles in one frame: a flight's destination joins the
-//! requests, and a warm disk cache answers every one of them within a second. Each worker
+//! A covering can ask for hundreds of tiles in one frame, and a warm disk cache answers every
+//! one of them within a second. Each worker
 //! then tessellates a tile at a time, and a low-zoom planet tile takes hundreds of
-//! megabytes while it is being built. Processing dozens at once exhausts a headset's memory
+//! megabytes while it is being built. Processing dozens at once exhausts a device's memory
 //! limit. The request systems take the nearest tiles first and stop once this many are in
 //! flight, so a burst becomes a stream the frame loop drains.
 

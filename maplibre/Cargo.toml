@@ -23,12 +23,11 @@ embed-static-tiles = ["maplibre-build-tools/sqlite"]
 headless = ["png", "raster"]
 raster = ["image", "moxcms"]
 geojson = []
-# Reads MapLibre Tile (MLT) vector tiles. Its encoder dependencies reach `getrandom` 0.1,
-# which has no visionOS support, so a visionOS build turns it off.
+# Reads MapLibre Tile (MLT) vector tiles.
 mlt = ["dep:mlt-core"]
 
 
-[target.'cfg(any(target_os = "macos", target_os = "ios", target_os = "visionos", target_os = "linux", target_os = "android", target_os = "windows"))'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "android", target_os = "windows"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util.workspace = true
 env_logger.workspace = true

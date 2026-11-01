@@ -4,7 +4,7 @@
 //! Glyphs are spaced in screen pixels along the projected line, walking outward from the
 //! anchor, so a label keeps its pixel size however the line is foreshortened. Each glyph's
 //! centre is mapped back onto the line in tile units, and its direction is the line's own in
-//! tile units, which the vertex shader turns to the screen every frame. A head-tracked view
+//! tile units, which the vertex shader turns to the screen every frame. An external view
 //! places labels less often than it draws, and a glyph so posed stays on its line and turned
 //! along it between placements.
 

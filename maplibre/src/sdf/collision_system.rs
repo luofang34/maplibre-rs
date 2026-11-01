@@ -102,7 +102,7 @@ impl System for CollisionSystem {
                     .map(|entry| entry.0)
         });
         let view = (view_state.view_projection().0, view_state.viewport_size());
-        // A head-tracked view changes every frame, so it keeps the periodic cadence instead of
+        // An external view changes every frame, so it keeps the periodic cadence instead of
         // placing every label each frame.
         let moved = !view_state.has_external_view()
             && AsRef::<[[f64; 4]; 4]>::as_ref(&view.0)

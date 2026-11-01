@@ -204,7 +204,7 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
     assert_eq!(
         client.max_fetches_for_any_url(),
         1,
-        "TruthScene and BeliefAvionics must never fetch the same static DEM/raster tile twice"
+        "two maps must never fetch the same static DEM/raster tile twice"
     );
     assert!(
         shared.asset_cache().dem_decode_count() > 0,
@@ -212,7 +212,7 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
     );
     assert!(
         shared.pipelines().pipeline_hit_count() > 0,
-        "BeliefAvionics must hit SharedPipelines compiled by TruthScene"
+        "the second map must hit SharedPipelines compiled by the first"
     );
 
     let common_dem = loaded_dem_coords(&truth_map)
@@ -276,6 +276,6 @@ async fn shared_map_assets_deduplicates_static_dem_and_pipelines_across_isolated
     .expect("read belief");
     assert_ne!(
         truth_px, belief_px,
-        "TruthScene GeoJSON/style mutations must never leak into BeliefAvionics"
+        "GeoJSON and style mutations must never leak into the other map"
     );
 }
