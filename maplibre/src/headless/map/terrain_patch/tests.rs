@@ -14,20 +14,12 @@ use crate::{
         camera::EyeFrustum,
         eventually::{Eventually, Eventually::Initialized},
         frame_input::ViewSource,
-        settings::{
-            BufferPoolSizes, Msaa, ProceduralReliefStyle, RendererSettings, TerrainDrapeMode,
-        },
+        settings::{BufferPoolSizes, Msaa, RendererSettings, TerrainDrapeMode},
         view_state::{ExternalAnchor, ExternalView},
         RenderPlugin,
     },
-    sdf::SymbolBufferPool,
     style::Style,
-    terrain::{
-        resources::{TerrainResources, UNIFORM_STRIDE},
-        transferables::DefaultDemTransferables,
-        DrapePhase, TerrainPlugin,
-    },
-    vector::VectorBufferPool,
+    terrain::{resources::TerrainResources, transferables::DefaultDemTransferables, TerrainPlugin},
 };
 
 fn encode_terrarium(elevation_m: f64) -> Rgba<u8> {
@@ -87,166 +79,13 @@ fn svs_external_view(lat: f64, lon: f64, alt_m: f64, pitch_deg: f64, aspect: f64
     }
 }
 
-fn count_red_warning_pixels(rgba: &[u8]) -> usize {
-    rgba.as_chunks::<4>()
-        .0
-        .iter()
-        .filter(|px| {
-            px[0] > 175 && px[0] > px[1].saturating_add(55) && px[0] > px[2].saturating_add(80)
-        })
-        .count()
-}
-
-#[tokio::test]
-async fn procedural_relief_svs_renders_with_zero_drape_allocations_and_taws_bands() {
-    let settings = RendererSettings {
-        msaa: Msaa { samples: 1 },
-        buffer_pools: BufferPoolSizes::EMPTY,
-        symbol_pools: BufferPoolSizes::EMPTY,
-        terrain_drape_mode: TerrainDrapeMode::ProceduralRelief(ProceduralReliefStyle::default()),
-        ..RendererSettings::default()
-    };
-    let (kernel, renderer) = create_headless_renderer_with_settings(960, 540, None, settings)
-        .await
-        .expect("960x540 SVS headless renderer");
-    let mut map = HeadlessMap::new(
-        svs_terrain_style(),
-        renderer,
-        kernel,
-        vec![
-            Box::new(RenderPlugin),
-            Box::new(BackgroundPlugin),
-            Box::new(TerrainPlugin::<DefaultDemTransferables>::default()),
-            Box::new(HeadlessPlugin::new(false).retain_supplied_tiles()),
-        ],
-    )
-    .expect("SVS headless map");
-
-    let mut dem_tiles = Vec::new();
-    for z in 0..=6_u8 {
-        let side = 1_i32 << z;
-        let cx = ((8.0 + 180.0) / 360.0 * f64::from(side)).floor() as i32;
-        let lat_rad = 47.0_f64.to_radians();
-        let merc_y =
-            (1.0 - (lat_rad.tan() + 1.0 / lat_rad.cos()).ln() / std::f64::consts::PI) * 0.5;
-        let cy = (merc_y * f64::from(side)).floor() as i32;
-        for dy in -1..=1 {
-            for dx in -1..=1 {
-                let x = (cx + dx).rem_euclid(side);
-                let y = (cy + dy).clamp(0, side - 1);
-                dem_tiles.push((
-                    WorldTileCoords {
-                        x,
-                        y,
-                        z: ZoomLevel::new(z),
-                    },
-                    synthetic_ridge_dem(64, 300.0, 2_750.0),
-                ));
-            }
-        }
-    }
-    map.load_dem_tiles(dem_tiles)
-        .expect("load synthetic ridge DEM");
-    map.frame_input_mut().view =
-        ViewSource::External(svs_external_view(46.88, 8.0, 3_100.0, -18.0, 960.0 / 540.0));
-    map.run_frame().expect("first SVS frame");
-    map.run_frame().expect("settled SVS frame");
-
-    let drape_phase = map
-        .world()
-        .resources
-        .get::<DrapePhase>()
-        .expect("DrapePhase resource");
-    assert!(
-        drape_phase.targets.is_empty(),
-        "ProceduralRelief must schedule 0 DrapePhase passes"
-    );
-
-    let Some(Initialized(terrain)) = map.world().resources.get::<Eventually<TerrainResources>>()
-    else {
-        panic!("TerrainResources must be initialized");
-    };
-    assert!(
-        terrain.scratch().is_none(),
-        "DrapeScratch must not be allocated"
-    );
-    assert_eq!(
-        terrain.drape_texture_total(),
-        0,
-        "DrapeCache must hold 0 textures"
-    );
-    assert_eq!(terrain.drape_size(), 0);
-    assert!(
-        !terrain.draws().is_empty(),
-        "3D terrain tiles must be drawn in MAIN_PASS"
-    );
-
-    let (drape_bytes, dem_bytes) = terrain.texture_bytes();
-    assert_eq!(drape_bytes, 0);
-    let terrain_gpu_bytes = terrain.vertex_buffer().size() as usize
-        + terrain.index_buffer().size() as usize
-        + (UNIFORM_STRIDE * 1024) as usize
-        + drape_bytes
-        + dem_bytes;
-    let vec_bytes = match map.world().resources.get::<Eventually<VectorBufferPool>>() {
-        Some(Initialized(p)) => p.vertices().size() + p.indices().size(),
-        _ => 0,
-    } as usize;
-    let sym_bytes = match map.world().resources.get::<Eventually<SymbolBufferPool>>() {
-        Some(Initialized(p)) => p.vertices().size() + p.indices().size(),
-        _ => 0,
-    } as usize;
-    let color_bytes = 960 * 540 * 4;
-    let depth_bytes = 960 * 540 * 8;
-    let total_footprint = terrain_gpu_bytes + vec_bytes + sym_bytes + color_bytes + depth_bytes;
-    assert!(
-        total_footprint < 40 * 1024 * 1024,
-        "960x540 SVS GPU footprint ({total_footprint} B) must be < 40 MiB"
-    );
-
-    let rgba_no_taws = crate::headless::map::readback::read_blocking(
-        &map,
-        map.color_texture().expect("color texture"),
-        wgpu::TextureAspect::All,
-    )
-    .expect("read SVS frame");
-    let unique_colors: HashSet<[u8; 3]> = rgba_no_taws
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .step_by(17)
-        .map(|px| [px[0], px[1], px[2]])
-        .collect();
-    assert!(
-        unique_colors.len() > 24,
-        "ProceduralRelief must produce shaded hypsometric + gridline variation (got {} colors)",
-        unique_colors.len()
-    );
-    let red_before = count_red_warning_pixels(&rgba_no_taws);
-
-    // Lower ownship TAWS reference altitude to 1,900 m MSL so ridge peaks (> 1,900 m) trigger TAWS red.
-    map.set_procedural_relief_reference_altitude(Some(1_900.0));
-    map.run_frame().expect("TAWS SVS frame");
-    let rgba_taws = crate::headless::map::readback::read_blocking(
-        &map,
-        map.color_texture().expect("color texture"),
-        wgpu::TextureAspect::All,
-    )
-    .expect("read TAWS frame");
-    let red_after = count_red_warning_pixels(&rgba_taws);
-    assert!(
-        red_after > red_before + 500,
-        "TAWS reference altitude must highlight terrain peaks in red (before={red_before}, after={red_after})"
-    );
-}
-
 #[tokio::test]
 async fn resident_terrain_patch_exports_stitched_129x129_grid_and_drape_handle() {
     let settings = RendererSettings {
         msaa: Msaa { samples: 1 },
         buffer_pools: BufferPoolSizes::EMPTY,
         symbol_pools: BufferPoolSizes::EMPTY,
-        terrain_drape_mode: TerrainDrapeMode::ProceduralRelief(ProceduralReliefStyle::default()),
+        terrain_drape_mode: TerrainDrapeMode::Draped { edge_px: 256 },
         ..RendererSettings::default()
     };
     let (kernel, renderer) = create_headless_renderer_with_settings(256, 256, None, settings)
@@ -286,7 +125,7 @@ async fn resident_terrain_patch_exports_stitched_129x129_grid_and_drape_handle()
     map.load_dem_tiles(dem_tiles).expect("load DEM");
     map.frame_input_mut().view =
         ViewSource::External(svs_external_view(47.0, 8.0, 4_500.0, -35.0, 1.0));
-    map.run_frame().expect("procedural frame");
+    map.run_frame().expect("terrain frame");
 
     let drawn_coords: Vec<WorldTileCoords> = {
         let Some(Initialized(terrain)) =
@@ -304,7 +143,6 @@ async fn resident_terrain_patch_exports_stitched_129x129_grid_and_drape_handle()
     assert_eq!(patch.grid_side, 129);
     assert_eq!(patch.stitched_heights_meters.len(), 129 * 129);
     assert!(patch.stitched_to_neighbors);
-    assert!(patch.drape_texture.is_none());
     assert!(patch.max_elevation_meters > patch.min_elevation_meters);
 
     // Check shared East-West seam continuity across any adjacent rendered pair at the same zoom.
@@ -333,14 +171,13 @@ async fn resident_terrain_patch_exports_stitched_129x129_grid_and_drape_handle()
         }
     }
 
-    // Switching back to Draped mode populates `drape_texture` on resident patches.
-    map.set_terrain_drape_mode(TerrainDrapeMode::Draped { edge_px: 256 });
+    // Baked drapes reach the resident patch.
     map.run_frame().expect("draped frame");
     let draped_patch = map
         .resident_terrain_patch(first)
         .expect("draped terrain patch");
     assert!(
         draped_patch.drape_texture.is_some(),
-        "Draped mode must expose the resident mipmapped drape texture handle"
+        "the resident mipmapped drape texture handle is exposed"
     );
 }

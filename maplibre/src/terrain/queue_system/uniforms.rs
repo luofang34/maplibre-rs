@@ -130,8 +130,6 @@ pub(super) fn tile_uniforms(
         daylight: [0.0; 4],
         twilight: [0.0; 4],
         moonlight: [0.0; 4],
-        procedural_relief: [0.0; 4],
-        procedural_grid: [0.0; 4],
     })
 }
 
@@ -230,12 +228,7 @@ pub(super) fn prepare_tiles(
         ) else {
             continue;
         };
-        surface_uniforms(
-            &mut block,
-            spec.coords,
-            (style, lighting, terrain.drape_mode()),
-            view_state,
-        );
+        surface_uniforms(&mut block, spec.coords, (style, lighting), view_state);
         uniforms.push(block);
         sources.push((dem_coords, spec.coords, drape_source));
     }
@@ -283,11 +276,7 @@ pub(super) fn with_world_copies(
 fn surface_uniforms(
     block: &mut TerrainTileUniforms,
     coords: WorldTileCoords,
-    (style, lighting, drape_mode): (
-        &Style,
-        crate::render::SceneLighting,
-        crate::render::settings::TerrainDrapeMode,
-    ),
+    (style, lighting): (&Style, crate::render::SceneLighting),
     view: &ViewState,
 ) {
     globe::set_uniforms(block, coords, view);
@@ -304,29 +293,4 @@ fn surface_uniforms(
     block.relief_strength = if view.has_external_view() { 0.45 } else { 0.0 };
     block.fog_opacity[3] = f32::from(view.has_external_view());
     block.fog_position = view.eye_fog_position(coords).unwrap_or([0.0; 4]);
-    match drape_mode {
-        crate::render::settings::TerrainDrapeMode::ProceduralRelief(relief) => {
-            let tiles_across = 2_f64.powi(i32::from(u8::from(coords.z)));
-            let merc_u =
-                std::f64::consts::PI * (1.0 - 2.0 * ((f64::from(coords.y) + 0.5) / tiles_across));
-            let tile_span_m =
-                (view.body().circumference_meters() / tiles_across / merc_u.cosh()).max(1.0) as f32;
-            block.procedural_relief = [
-                1.0,
-                f32::from(relief.hypsometric),
-                relief.slope_shading,
-                relief.reference_altitude_meters.unwrap_or(0.0),
-            ];
-            block.procedural_grid = [
-                relief.grid_spacing_meters,
-                relief.grid_opacity,
-                f32::from(relief.reference_altitude_meters.is_some()),
-                tile_span_m,
-            ];
-        }
-        crate::render::settings::TerrainDrapeMode::Draped { .. } => {
-            block.procedural_relief = [0.0; 4];
-            block.procedural_grid = [0.0; 4];
-        }
-    }
 }

@@ -35,7 +35,7 @@ pub(crate) mod edges;
 mod prefetch;
 mod readiness;
 mod targets;
-pub(crate) use targets::{procedural_specs, target_specs};
+pub(crate) use targets::target_specs;
 mod drape_phase;
 pub(crate) mod surface_covering;
 mod uniforms;
@@ -108,32 +108,23 @@ pub fn queue_system(
         world.resources.insert(TerrainFrame::default());
         return Ok(());
     };
-    let (phase, surface_specs, surface_sources) = if drape_mode.is_procedural_relief() {
-        let specs = procedural_specs(style, view_state, world)?;
-        let sources = vec![None; specs.len()];
-        (DrapePhase::default(), specs, sources)
-    } else {
-        let specs = target_specs(style, view_state, world)?;
-        let PreparedDrapes {
-            redraw,
-            sources,
-            clear_color,
-        } = prepare_drapes(&specs, style, view_state, world, device)?;
-        let paint_zoom = crate::vector::upload_system::paint::current_zoom(
-            world,
-            view_state.style_zoom().value(),
-        );
-        let phase = encode_drapes(
-            &specs,
-            &redraw,
-            clear_color,
-            world,
-            crate::coords::Zoom::new(paint_zoom),
-            queue,
-        )?;
-        let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
-        (phase, surface_specs, surface_sources)
-    };
+    let specs = target_specs(style, view_state, world)?;
+    let PreparedDrapes {
+        redraw,
+        sources,
+        clear_color,
+    } = prepare_drapes(&specs, style, view_state, world, device)?;
+    let paint_zoom =
+        crate::vector::upload_system::paint::current_zoom(world, view_state.style_zoom().value());
+    let phase = encode_drapes(
+        &specs,
+        &redraw,
+        clear_color,
+        world,
+        crate::coords::Zoom::new(paint_zoom),
+        queue,
+    )?;
+    let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
     queue_tiles(
         world,
         style,

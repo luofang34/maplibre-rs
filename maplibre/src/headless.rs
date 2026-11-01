@@ -70,7 +70,7 @@ pub use shared_assets::SharedMapAssets;
 
 pub use crate::render::{
     placement_3d::{AltitudeReference, Orientation3d, Placement3d},
-    settings::{ProceduralReliefStyle, TerrainDrapeMode},
+    settings::TerrainDrapeMode,
 };
 
 /// Creates a renderer with default GPU settings and nonzero physical-pixel dimensions.

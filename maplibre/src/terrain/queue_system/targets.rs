@@ -85,57 +85,6 @@ pub(crate) fn target_specs(
     ))
 }
 
-/// Selects pure 3D DEM surface tiles for [`crate::render::settings::TerrainDrapeMode::ProceduralRelief`]
-/// without computing 2D drape targets or prefetching draped source tiles.
-pub(crate) fn procedural_specs(
-    style: &Style,
-    view_state: &ViewState,
-    world: &mut World,
-) -> Result<Vec<TargetSpec>, SystemError> {
-    let Some(dem) = crate::terrain::source::dem_source(style) else {
-        return Ok(Vec::new());
-    };
-    let view_region = crate::render::projection::terrain_region(
-        style,
-        view_state,
-        world,
-        dem.tile_size,
-        crate::render::view_state::ViewStatePadding::Tight,
-    )
-    .map_err(|error| {
-        tracing::error!(%error, "unable to select procedural terrain tiles");
-        SystemError::Setup
-    })?;
-    let Some(view_region) = view_region else {
-        return Ok(Vec::new());
-    };
-    let tiles: Vec<_> = view_region.iter().collect();
-    world
-        .resources
-        .insert(surface_covering::SurfaceTiles(tiles.clone()));
-    world
-        .resources
-        .insert(surface_covering::SurfaceCopies::of(view_region.copies()));
-    world
-        .resources
-        .get_or_init_mut::<cohort::TextureCohort>()
-        .enabled = false;
-    world
-        .resources
-        .insert(crate::terrain::request_system::DrapePrefetchRequests::default());
-    world
-        .resources
-        .insert(crate::terrain::request_system::DrapeRequests::default());
-    Ok(tiles
-        .into_iter()
-        .map(|coords| TargetSpec {
-            coords,
-            shapes: Vec::new(),
-            absent_sources: Vec::new(),
-        })
-        .collect())
-}
-
 /// The key GL JS draws terrain tiles by, smallest first: `coveringTiles`' squared distance
 /// between the map centre, at the covering's nominal level, and the tile's own column and row,
 /// whatever its level. With translucent drapes the order decides which skirts show through.

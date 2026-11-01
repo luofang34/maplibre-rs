@@ -35,7 +35,7 @@ pub const UNIFORM_STRIDE: u64 = 512;
 // A block that outgrows its stride would overwrite the next tile's; the stride is a
 // multiple of the 256-byte offset alignment every backend accepts.
 const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() as u64 <= UNIFORM_STRIDE);
-const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() == 512);
+const _: () = assert!(std::mem::size_of::<TerrainTileUniforms>() == 480);
 /// Largest number of terrain tiles drawn in one frame.
 const UNIFORM_CAPACITY: u64 = 1024;
 
@@ -86,10 +86,6 @@ pub struct TerrainTileUniforms {
     /// Direction towards the Moon in globe world axes, with w the light it adds overhead;
     /// all zero without a host Moon.
     pub moonlight: [f32; 4],
-    /// Procedural DEM relief controls: `[enabled, hypsometric, slope_shading, reference_alt_m]`.
-    pub procedural_relief: [f32; 4],
-    /// Procedural DEM grid & TAWS controls: `[grid_spacing_m, grid_opacity, taws_enabled, tile_span_m]`.
-    pub procedural_grid: [f32; 4],
     /// Index into the per-frame edge storage buffer in `edge_index[0]`.
     pub edge_index: [f32; 4],
 }
@@ -138,7 +134,7 @@ pub struct DrapeScratch {
 pub struct TerrainResources {
     pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
-    mipmaps: Option<MipmapGenerator>,
+    mipmaps: MipmapGenerator,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
@@ -184,8 +180,7 @@ impl TerrainResources {
         )
     }
 
-    /// Creates terrain resources configured for `drape_mode`, omitting `MipmapGenerator` and
-    /// drape allocations when [`TerrainDrapeMode::ProceduralRelief`] is active.
+    /// Creates terrain resources configured for `drape_mode`.
     pub fn new_with_mode(
         device: &wgpu::Device,
         queue: &crate::render::upload_queue::UploadQueue,
@@ -196,19 +191,12 @@ impl TerrainResources {
         drape_mode: TerrainDrapeMode,
     ) -> Self {
         let max_dim = device.limits().max_texture_dimension_2d.max(MIN_DRAPE_SIZE);
-        let (drape_size, drape_mode, mipmaps) = match drape_mode {
-            TerrainDrapeMode::Draped { edge_px } => {
-                let clamped = edge_px.clamp(MIN_DRAPE_SIZE, max_dim);
-                (
-                    clamped,
-                    TerrainDrapeMode::Draped { edge_px: clamped },
-                    Some(MipmapGenerator::new(device, color_format)),
-                )
-            }
-            TerrainDrapeMode::ProceduralRelief(style) => {
-                (0, TerrainDrapeMode::ProceduralRelief(style), None)
-            }
+        let TerrainDrapeMode::Draped { edge_px } = drape_mode;
+        let drape_size = edge_px.clamp(MIN_DRAPE_SIZE, max_dim);
+        let drape_mode = TerrainDrapeMode::Draped {
+            edge_px: drape_size,
         };
+        let mipmaps = MipmapGenerator::new(device, color_format);
         let mesh = create_terrain_mesh(TERRAIN_MESH_SIZE);
         let vertex_buffer = queue.create_buffer_init(
             device,
@@ -290,29 +278,17 @@ impl TerrainResources {
     }
 
     /// Updates the active [`TerrainDrapeMode`], immediately releasing `DrapeScratch` and
-    /// `DrapeCache` textures when switching to [`TerrainDrapeMode::ProceduralRelief`] or resizing.
+    /// `DrapeCache` textures when the size changes.
     pub fn set_drape_mode(&mut self, device: &wgpu::Device, mode: TerrainDrapeMode) {
         let max_dim = device.limits().max_texture_dimension_2d.max(MIN_DRAPE_SIZE);
-        match mode {
-            TerrainDrapeMode::ProceduralRelief(style) => {
-                self.drape_mode = TerrainDrapeMode::ProceduralRelief(style);
-                self.drape_size = 0;
-                self.drape_scratch = None;
-                self.drapes = DrapeCache::default();
-            }
-            TerrainDrapeMode::Draped { edge_px } => {
-                let clamped = edge_px.clamp(MIN_DRAPE_SIZE, max_dim);
-                if self.drape_size != clamped {
-                    self.drape_size = clamped;
-                    self.drape_scratch = None;
-                    self.drapes = DrapeCache::default();
-                }
-                self.drape_mode = TerrainDrapeMode::Draped { edge_px: clamped };
-                if self.mipmaps.is_none() {
-                    self.mipmaps = Some(MipmapGenerator::new(device, self.color_format));
-                }
-            }
+        let TerrainDrapeMode::Draped { edge_px } = mode;
+        let clamped = edge_px.clamp(MIN_DRAPE_SIZE, max_dim);
+        if self.drape_size != clamped {
+            self.drape_size = clamped;
+            self.drape_scratch = None;
+            self.drapes = DrapeCache::default();
         }
+        self.drape_mode = TerrainDrapeMode::Draped { edge_px: clamped };
     }
 
     /// Edge in pixels of each drape texture and of the drape pass's attachments.
@@ -360,10 +336,7 @@ impl TerrainResources {
 
     /// Creates the scratch attachments used by every drape pass.
     pub fn ensure_scratch(&mut self, device: &wgpu::Device) {
-        if self.drape_scratch.is_some()
-            || self.drape_mode.is_procedural_relief()
-            || self.drape_size == 0
-        {
+        if self.drape_scratch.is_some() {
             return;
         }
         let color = self.msaa.is_multisampling().then(|| {

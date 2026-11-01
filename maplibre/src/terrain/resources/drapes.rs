@@ -48,9 +48,7 @@ impl TerrainResources {
         encoder: &mut wgpu::CommandEncoder,
         texture: &Texture,
     ) {
-        if let Some(mipmaps) = &self.mipmaps {
-            mipmaps.generate(device, encoder, &texture.texture);
-        }
+        self.mipmaps.generate(device, encoder, &texture.texture);
     }
 
     /// Keeps the requested tile drapes active and parks other textures with their content.
