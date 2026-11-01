@@ -4,6 +4,8 @@
 
 use crate::{environment::Environment, plugin::Plugin};
 
+pub mod altitude;
+pub mod buffers;
 #[cfg(feature = "experimental")]
 pub mod daylight;
 pub(crate) mod pattern;
@@ -49,6 +51,7 @@ impl<E: Environment> Plugin<E> for BackgroundPlugin {
                 crate::background::resource_system::SkyRenderPipeline,
             >::Uninitialized,
         );
+        world.resources.init::<buffers::BackgroundGpuBuffers>();
 
         #[cfg(feature = "experimental")]
         {

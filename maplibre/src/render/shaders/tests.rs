@@ -113,6 +113,22 @@ fn stages() -> Vec<Stage> {
     ] {
         stages.push((name, source.to_owned(), ""));
     }
+    #[cfg(not(feature = "experimental"))]
+    for (name, source) in [
+        (
+            "globe daylight vertex",
+            include_str!("globe_daylight.vertex.wgsl"),
+        ),
+        (
+            "globe daylight fragment",
+            concat!(
+                include_str!("daylight.wgsl.part"),
+                include_str!("globe_daylight.fragment.wgsl")
+            ),
+        ),
+    ] {
+        stages.push((name, source.to_owned(), ""));
+    }
     stages
 }
 

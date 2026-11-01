@@ -7,25 +7,12 @@ use crate::{
         render_phase::{DrawState, LayerItem, ProjectionBinding, RenderPhase, TranslucentItem},
         shaders::{AtmosphereLayerMetadata, BackgroundLayerMetadata, ShaderTileMetadata},
     },
-    style::layer::LayerPaint,
     tcs::system::{SystemError, SystemResult},
 };
 
-/// GPU metadata shared by background and atmosphere draws.
-pub struct BackgroundBuffers {
-    /// Background layer paint metadata.
-    pub metadata_buffer: wgpu::Buffer,
-    /// Instance of each background style layer in `metadata_buffer`.
-    pub instances: std::collections::HashMap<String, u32>,
-    /// The tile transform of each of `globe_tiles`, in order, used by globe meshes.
-    pub tile_metadata_buffer: wgpu::Buffer,
-    /// The tiles the globe's background is drawn on.
-    pub globe_tiles: Vec<crate::coords::WorldTileCoords>,
-    /// Evaluated atmosphere opacity.
-    pub atmosphere_metadata_buffer: wgpu::Buffer,
-    /// Sky colours and horizon, when the style has a sky and the map is not a globe.
-    pub sky_metadata_buffer: Option<wgpu::Buffer>,
-}
+pub use super::buffers::{BackgroundBuffers, BackgroundGpuBuffers};
+pub(crate) use super::buffers::globe_tiles;
+use super::buffers::{background_color, globe_tile_metadata, sky_metadata, world_rows};
 
 use super::render_commands::{
     DrawAtmosphere, DrawBackground, DrawBackgroundPattern, DrawGlobeBackground,
@@ -33,7 +20,7 @@ use super::render_commands::{
 };
 
 /// How strongly the atmosphere is drawn this frame: as the style's `sky` blends it, or in full
-/// where the host turned it on, faded with the projection's globe transition.
+/// where the host turned it on, faded with the projection's globe transition and camera altitude below 100 km.
 pub fn atmosphere_blend(
     style: &crate::style::Style,
     view_state: &crate::render::view_state::ViewState,
@@ -53,7 +40,14 @@ pub fn atmosphere_blend(
             .get::<crate::render::SceneLighting>()
             .is_some_and(|l| l.atmosphere),
     ));
-    sky_blend.max(host_blend) * transition
+    let raw_blend = sky_blend.max(host_blend) * transition;
+    if raw_blend > 0.0 {
+        let altitude_blend = globe_camera_for_view(view_state)
+            .map_or(0.0, |camera| super::altitude::altitude_blend_for_camera(&camera));
+        raw_blend * altitude_blend
+    } else {
+        0.0
+    }
 }
 
 /// Appends visible background, sky and atmosphere items and uploads their frame metadata.
@@ -224,27 +218,11 @@ pub fn queue_system(
                 world_rows,
             });
         }
-        let buffer = renderer.queue.create_buffer_init(
-            &renderer.device,
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Background Metadata Buffer"),
-                contents: bytemuck::cast_slice(&metadatas),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            },
-        );
         let globe_tiles = globe_tiles(world);
         let tile_metadata: Vec<ShaderTileMetadata> = globe_tiles
             .iter()
             .map(|coords| globe_tile_metadata(view_state, *coords))
             .collect();
-        let tile_metadata_buffer = renderer.queue.create_buffer_init(
-            &renderer.device,
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Globe Background Tile Metadata Buffer"),
-                contents: bytemuck::cast_slice(&tile_metadata),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            },
-        );
         let atmosphere_metadata = if atmosphere_blend > 0.0 {
             let camera = globe_camera_for_view(view_state).map_err(|error| {
                 tracing::error!(?error, "failed to build atmosphere globe camera");
@@ -270,24 +248,38 @@ pub fn queue_system(
         } else {
             AtmosphereLayerMetadata::disabled()
         };
-        let atmosphere_metadata_buffer = renderer.queue.create_buffer_init(
-            &renderer.device,
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Atmosphere Metadata Buffer"),
-                contents: bytemuck::bytes_of(&atmosphere_metadata),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            },
-        );
-        let sky_metadata_buffer = sky_metadata.map(|sky| {
-            renderer.queue.create_buffer_init(
-                &renderer.device,
-                &wgpu::util::BufferInitDescriptor {
-                    label: Some("Sky Metadata Buffer"),
-                    contents: bytemuck::bytes_of(&sky),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                },
+
+        let (buffer, tile_metadata_buffer, atmosphere_metadata_buffer, sky_metadata_buffer) = {
+            let gpu_buffers = world
+                .resources
+                .get_or_init_mut::<BackgroundGpuBuffers>();
+            gpu_buffers.write_metadata(&renderer.device, &renderer.queue, &metadatas);
+            gpu_buffers.write_tile_metadata(&renderer.device, &renderer.queue, &tile_metadata);
+            gpu_buffers.write_atmosphere(&renderer.device, &renderer.queue, &atmosphere_metadata);
+            if let Some(sky) = &sky_metadata {
+                gpu_buffers.write_sky(&renderer.device, &renderer.queue, sky);
+            }
+            (
+                gpu_buffers
+                    .metadata_buffer()
+                    .expect("metadata buffer")
+                    .clone(),
+                gpu_buffers
+                    .tile_metadata_buffer()
+                    .expect("tile metadata buffer")
+                    .clone(),
+                gpu_buffers
+                    .atmosphere_metadata_buffer()
+                    .expect("atmosphere metadata buffer")
+                    .clone(),
+                sky_metadata.as_ref().map(|_| {
+                    gpu_buffers
+                        .sky_metadata_buffer()
+                        .expect("sky metadata buffer")
+                        .clone()
+                }),
             )
-        });
+        };
         world.resources.insert(BackgroundBuffers {
             metadata_buffer: buffer,
             instances,
@@ -301,174 +293,3 @@ pub fn queue_system(
     Ok(())
 }
 
-/// The tiles the globe's background is drawn on: the frame's covering, so that the ground
-/// near an eye standing on the globe follows the sphere as closely as the tiles drawn there;
-/// the world tile while no covering is selected.
-pub(crate) fn globe_tiles(world: &crate::tcs::world::World) -> Vec<crate::coords::WorldTileCoords> {
-    let covering: Vec<_> = crate::render::eye_covering::drawn_tiles(world)
-        .unwrap_or_default()
-        .iter()
-        .copied()
-        .filter(|coords| coords.wrapped().is_some())
-        .collect();
-    if covering.is_empty() {
-        vec![crate::coords::WorldTileCoords::default()]
-    } else {
-        covering
-    }
-}
-
-fn globe_tile_metadata(
-    view_state: &crate::render::view_state::ViewState,
-    coords: crate::coords::WorldTileCoords,
-) -> ShaderTileMetadata {
-    let scale = view_state.zoom().scale_to_tile(&coords) as f32;
-    ShaderTileMetadata {
-        transform: view_state
-            .gpu_view_projection()
-            .to_model_view_projection(coords.transform_for_zoom(view_state.zoom()))
-            .downcast()
-            .into(),
-        zoom_factor: scale,
-        viewport_width: view_state.width() as f32,
-        viewport_height: view_state.height() as f32,
-        tile_mercator_coords: crate::projection::renderer_data::tile_mercator_coordinates(
-            coords.into_tile(crate::style::source::TileAddressingScheme::XYZ),
-        )
-        .into(),
-        clip_antimeridian: u32::from(u8::from(coords.z) == 0),
-        line_width_scale: 1.0,
-        line_units_per_pixel: 8.0 * scale,
-        clip_region: crate::render::shaders::WHOLE_TILE,
-    }
-}
-
-/// The background colour at a zoom, with its opacity multiplied into premultiplied-free alpha.
-fn background_color(layer: &crate::style::layer::StyleLayer, zoom: f64) -> [f32; 4] {
-    let Some(LayerPaint::Background(paint)) = &layer.paint else {
-        return [0.0, 0.0, 0.0, 1.0];
-    };
-    let mut color: [f32; 4] = paint
-        .background_color
-        .as_ref()
-        .and_then(|property| property.evaluate_at_zoom(zoom))
-        .map_or([0.0, 0.0, 0.0, 1.0], |color| {
-            cint::Alpha::<cint::EncodedSrgb<f32>>::from(color).into()
-        });
-    let opacity = paint
-        .background_opacity
-        .as_ref()
-        .and_then(|property| property.evaluate_at_zoom(zoom))
-        .unwrap_or(1.0);
-    color[3] *= opacity.clamp(0.0, 1.0);
-    color
-}
-
-/// The sky draw's values for the frame: colours at the zoom and the horizon line on screen,
-/// as GL JS `skyUniformValues` computes them.
-fn sky_metadata(
-    sky: &crate::style::sky::SkySpecification,
-    view_state: &crate::render::view_state::ViewState,
-    projection_transition: f32,
-) -> crate::render::shaders::SkyLayerMetadata {
-    let colors = sky.colors_at(view_state.zoom().value());
-    let height = view_state.height();
-    // Zero depth denotes absent content to the host compositor. This distant positive
-    // depth keeps sky coverage valid without visible parallax at the headset near plane.
-    crate::render::shaders::SkyLayerMetadata {
-        sky_color: colors.sky,
-        horizon_color: colors.horizon,
-        horizon: view_state.horizon_line().to_shader(),
-        blend: [
-            (f64::from(colors.sky_horizon_blend) * height / 2.0) as f32,
-            if view_state.opaque_environment() {
-                0.0
-            } else {
-                projection_transition
-            },
-            height as f32,
-            if view_state.has_external_view() {
-                1.0e-8
-            } else {
-                0.0
-            },
-        ],
-    }
-}
-
-/// The rows that tell a pixel's map row for the northern and southern edges of the flat map,
-/// or ones that cut nothing where the map has no such edges.
-fn world_rows(view_state: &crate::render::view_state::ViewState, edges: bool) -> [[f32; 4]; 2] {
-    use cgmath::{Matrix3, Matrix4, SquareMatrix, Vector3};
-
-    const OPEN: [[f32; 4]; 2] = [[0.0, 0.0, 0.0, -1e30], [0.0, 0.0, 0.0, 1e30]];
-    if !edges {
-        return OPEN;
-    }
-    let center = view_state.camera().position();
-    let relative = view_state.view_projection().0
-        * Matrix4::from_translation(Vector3::new(center.x, center.y, 0.0));
-    // A point of the map plane is (x, y, 0, 1); the clip x, y and w it produces come from
-    // the matrix columns of x, y and the constant.
-    let plane = Matrix3::new(
-        relative.x.x,
-        relative.x.y,
-        relative.x.w,
-        relative.y.x,
-        relative.y.y,
-        relative.y.w,
-        relative.w.x,
-        relative.w.y,
-        relative.w.w,
-    );
-    let Some(inverse) = plane.invert() else {
-        return OPEN;
-    };
-    let world = crate::coords::TILE_SIZE * 2_f64.powf(view_state.zoom().value());
-    // Rows of the inverse give the map x, y and the scale a pixel's clip position carries.
-    [
-        [
-            inverse.x.y as f32,
-            inverse.y.y as f32,
-            inverse.z.y as f32,
-            (-center.y) as f32,
-        ],
-        [
-            inverse.x.z as f32,
-            inverse.y.z as f32,
-            inverse.z.z as f32,
-            (world - center.y) as f32,
-        ],
-    ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::background_color;
-    use crate::style::layer::StyleLayer;
-
-    fn layer(paint: serde_json::Value) -> StyleLayer {
-        let layer = serde_json::json!({"id": "b", "type": "background", "paint": paint});
-        serde_json::from_value(layer).expect("valid background layer")
-    }
-
-    #[test]
-    fn opacity_scales_alpha() {
-        let color = background_color(
-            &layer(serde_json::json!({"background-color": "blue", "background-opacity": 0.5})),
-            0.0,
-        );
-        assert_eq!(color, [0.0, 0.0, 1.0, 0.5]);
-    }
-
-    #[test]
-    fn colour_follows_zoom() {
-        let paint = serde_json::json!({"background-color": {
-            "stops": [[0, "red"], [10, "blue"]], "base": 1.0
-        }});
-        let start = background_color(&layer(paint.clone()), 0.0);
-        let end = background_color(&layer(paint), 10.0);
-        assert_eq!(start[..3], [1.0, 0.0, 0.0]);
-        assert_eq!(end[..3], [0.0, 0.0, 1.0]);
-    }
-}
