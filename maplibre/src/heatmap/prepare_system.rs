@@ -13,6 +13,16 @@ use crate::{
     tcs::system::{SystemError, SystemResult},
 };
 
+/// Calculates the downscaled (1/4x) density target dimensions for a given viewport size,
+/// ensuring both width and height are quarter-resolution and never 0.
+#[inline]
+pub fn density_target_size(width: f64, height: f64) -> (u32, u32) {
+    (
+        (width.round() as u32 >> 2).max(1),
+        (height.round() as u32 >> 2).max(1),
+    )
+}
+
 pub fn prepare_system(
     MapContext {
         world,
@@ -29,10 +39,7 @@ pub fn prepare_system(
         return Err(SystemError::Dependencies);
     };
     let zoom = view_state.zoom().value();
-    let size = (
-        view_state.width().round() as u32,
-        view_state.height().round() as u32,
-    );
+    let size = density_target_size(view_state.width(), view_state.height());
     let mut written = HashSet::new();
     for layer in &style.layers {
         let Some(LayerPaint::Heatmap(paint)) = &layer.paint else {
@@ -54,3 +61,28 @@ pub fn prepare_system(
     resources.retain_layers(&written);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn density_target_dimensions_are_quarter_resolution_and_never_zero() {
+        // Full HD viewport is downscaled to 1/4x (480x270)
+        assert_eq!(density_target_size(1920.0, 1080.0), (480, 270));
+
+        // 4K viewport
+        assert_eq!(density_target_size(3840.0, 2160.0), (960, 540));
+
+        // Sub-4 pixel dimensions must clamp to at least 1 (never zero)
+        assert_eq!(density_target_size(4.0, 4.0), (1, 1));
+        assert_eq!(density_target_size(3.0, 3.0), (1, 1));
+        assert_eq!(density_target_size(2.0, 2.0), (1, 1));
+        assert_eq!(density_target_size(1.0, 1.0), (1, 1));
+        assert_eq!(density_target_size(0.0, 0.0), (1, 1));
+
+        // Negative dimensions clamp to at least 1
+        assert_eq!(density_target_size(-100.0, -100.0), (1, 1));
+    }
+}
+

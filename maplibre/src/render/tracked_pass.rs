@@ -8,6 +8,8 @@
 
 use std::ops::Range;
 
+use smallvec::SmallVec;
+
 /// What a pass recorded, and what it skipped because it was already bound.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PassStats {
@@ -96,6 +98,13 @@ struct BoundSlice {
 }
 
 impl BoundSlice {
+    #[inline]
+    fn matches(&self, slice: &wgpu::BufferSlice<'_>) -> bool {
+        self.offset == slice.offset()
+            && self.size == slice.size()
+            && &self.buffer == slice.buffer()
+    }
+
     fn of(slice: &wgpu::BufferSlice<'_>) -> Self {
         Self {
             buffer: slice.buffer().clone(),
@@ -109,7 +118,7 @@ impl BoundSlice {
 #[derive(Default)]
 struct BoundState {
     pipeline: Option<wgpu::RenderPipeline>,
-    bind_groups: Vec<Option<(wgpu::BindGroup, Vec<wgpu::DynamicOffset>)>>,
+    bind_groups: Vec<Option<(wgpu::BindGroup, SmallVec<[wgpu::DynamicOffset; 2]>)>>,
     vertex_buffers: Vec<Option<BoundSlice>>,
     index_buffer: Option<(BoundSlice, wgpu::IndexFormat)>,
     stencil_reference: Option<u32>,
@@ -120,18 +129,6 @@ pub struct TrackedRenderPass<'w> {
     pass: wgpu::RenderPass<'w>,
     bound: BoundState,
     stats: PassStats,
-}
-
-/// Replaces `slots[index]` with `value` and reports whether it changed.
-fn replace<T: PartialEq>(slots: &mut Vec<Option<T>>, index: usize, value: T) -> bool {
-    if slots.len() <= index {
-        slots.resize_with(index + 1, || None);
-    }
-    if slots[index].as_ref() == Some(&value) {
-        return false;
-    }
-    slots[index] = Some(value);
-    true
 }
 
 impl<'w> TrackedRenderPass<'w> {
@@ -181,34 +178,57 @@ impl<'w> TrackedRenderPass<'w> {
         bind_group: &wgpu::BindGroup,
         offsets: &[wgpu::DynamicOffset],
     ) {
-        let changed = replace(
-            &mut self.bound.bind_groups,
-            index as usize,
-            (bind_group.clone(), offsets.to_vec()),
-        );
-        if self.count(changed) {
-            self.pass.set_bind_group(index, bind_group, offsets);
+        let index = index as usize;
+        let is_same = self
+            .bound
+            .bind_groups
+            .get(index)
+            .and_then(|slot| slot.as_ref())
+            .is_some_and(|(bound_bg, bound_offsets)| {
+                bound_bg == bind_group && bound_offsets.as_slice() == offsets
+            });
+
+        if self.count(!is_same) {
+            if self.bound.bind_groups.len() <= index {
+                self.bound.bind_groups.resize_with(index + 1, || None);
+            }
+            self.bound.bind_groups[index] =
+                Some((bind_group.clone(), SmallVec::from_slice(offsets)));
+            self.pass.set_bind_group(index as u32, bind_group, offsets);
         }
     }
 
     /// Binds `slice` at vertex buffer `slot` unless that range is bound there.
     pub fn set_vertex_buffer(&mut self, slot: u32, slice: wgpu::BufferSlice<'_>) {
-        let changed = replace(
-            &mut self.bound.vertex_buffers,
-            slot as usize,
-            BoundSlice::of(&slice),
-        );
-        if self.count(changed) {
+        let slot_idx = slot as usize;
+        let is_same = self
+            .bound
+            .vertex_buffers
+            .get(slot_idx)
+            .and_then(|bound| bound.as_ref())
+            .is_some_and(|bound| bound.matches(&slice));
+
+        if self.count(!is_same) {
+            if self.bound.vertex_buffers.len() <= slot_idx {
+                self.bound.vertex_buffers.resize_with(slot_idx + 1, || None);
+            }
+            self.bound.vertex_buffers[slot_idx] = Some(BoundSlice::of(&slice));
             self.pass.set_vertex_buffer(slot, slice);
         }
     }
 
     /// Binds `slice` as the index buffer unless that range and format are bound.
     pub fn set_index_buffer(&mut self, slice: wgpu::BufferSlice<'_>, format: wgpu::IndexFormat) {
-        let next = (BoundSlice::of(&slice), format);
-        let changed = self.bound.index_buffer.as_ref() != Some(&next);
-        if self.count(changed) {
-            self.bound.index_buffer = Some(next);
+        let is_same = self
+            .bound
+            .index_buffer
+            .as_ref()
+            .is_some_and(|(bound, bound_format)| {
+                *bound_format == format && bound.matches(&slice)
+            });
+
+        if self.count(!is_same) {
+            self.bound.index_buffer = Some((BoundSlice::of(&slice), format));
             self.pass.set_index_buffer(slice, format);
         }
     }
