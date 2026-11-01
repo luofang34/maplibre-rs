@@ -9,7 +9,12 @@
 
 
 - [Examples](./examples/index.md)
+  - [Display a Map](./examples/display-a-map.md)
   - [Display a Globe with a Vector Map](./examples/display-a-globe-with-a-vector-map.md)
+  - [Add 3D Terrain to a Map](./examples/add-3d-terrain.md)
+  - [Display Buildings in 3D](./examples/display-buildings-in-3d.md)
+  - [Add a GeoJSON Line](./examples/add-a-geojson-line.md)
+  - [Create and Style Clusters](./examples/create-and-style-clusters.md)
 
 
 - [Development Guide](./development-guide/index.md)
