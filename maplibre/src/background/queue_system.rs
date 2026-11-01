@@ -40,14 +40,14 @@ pub fn atmosphere_blend(
             .get::<crate::render::SceneLighting>()
             .is_some_and(|l| l.atmosphere),
     ));
-    let raw_blend = sky_blend.max(host_blend) * transition;
-    if raw_blend > 0.0 {
+    let sky_faded = if sky_blend > 0.0 {
         let altitude_blend = globe_camera_for_view(view_state)
             .map_or(0.0, |camera| super::altitude::altitude_blend_for_camera(&camera));
-        raw_blend * altitude_blend
+        sky_blend * altitude_blend
     } else {
         0.0
-    }
+    };
+    sky_faded.max(host_blend) * transition
 }
 
 /// Appends visible background, sky and atmosphere items and uploads their frame metadata.

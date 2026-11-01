@@ -1,4 +1,5 @@
 //! Shared immutable DEM and static raster tile decoding on top of [`AssetCache`].
+#![allow(dead_code, unused_imports)]
 
 use std::sync::{atomic::Ordering, Arc};
 

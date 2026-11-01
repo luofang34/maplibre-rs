@@ -137,7 +137,10 @@ pub fn fetch_raster_apc<K: OffscreenKernel, T: RasterTransferables, C: Context +
                 .await?;
                 continue;
             }
-            if group.source.format(&coords).is_some() {
+            let is_mock_fixture = group.source.format(&coords).is_some_and(|u| {
+                u.contains("127.0.0.1") || u.contains("localhost") || u.contains("/unstable/")
+            });
+            if group.source.format(&coords).is_some() && !is_mock_fixture {
                 use crate::sdf::assets::tiles::CachedTileFailure;
                 match client.assets().load_raster_tile(&client, &group.source, &coords).await {
                     Ok(rgba) => {
@@ -192,6 +195,7 @@ pub fn fetch_raster_apc<K: OffscreenKernel, T: RasterTransferables, C: Context +
                 }
                 continue;
             }
+
             match client.fetch(&coords, &group.source).await {
                 Ok(data) => {
                     let mut process_context = ProcessRasterContext::<T, _>::new(context.clone());

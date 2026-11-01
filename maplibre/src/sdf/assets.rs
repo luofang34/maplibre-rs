@@ -10,6 +10,7 @@ mod cache;
 mod load;
 mod provider;
 pub mod wire;
+#[allow(unused_imports)]
 pub(crate) use cache::{fetch, tiles};
 pub use cache::{AssetCache, AssetFailure};
 pub(crate) use load::load_symbol_assets_awaiting;

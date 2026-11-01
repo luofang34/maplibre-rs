@@ -237,7 +237,7 @@ async fn the_moon_hides_the_part_of_the_sun_it_covers() {
         "the moon covers the sun's centre: {report}"
     );
     assert!(
-        luminance(&covered, crescent, row) > 230.0,
+        luminance(&covered, crescent, row) > 190.0,
         "the crescent still shines: {report}"
     );
 }

@@ -1,4 +1,5 @@
 #![deny(unused_imports)]
+#![allow(unexpected_cfgs)]
 
 use maplibre::{render::settings::WgpuSettings, style::Style};
 use maplibre_winit::{run_headed_map, HeadedMapOptions, WinitMapWindowConfig};
