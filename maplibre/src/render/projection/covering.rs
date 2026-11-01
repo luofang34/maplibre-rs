@@ -22,7 +22,7 @@ use crate::{
     },
     raster::RasterSourceId,
     render::{
-        eye_covering::FrameLodHistory,
+        frame_covering::FrameLodHistory,
         view_state::{ViewState, ViewStatePadding},
     },
     style::{source::Source, Style},
@@ -170,7 +170,7 @@ pub fn raster_source_regions(
     view_state: &ViewState,
     world: &World,
     padding: ViewStatePadding,
-) -> Result<crate::render::eye_covering::RasterCoverings, ProjectionStateError> {
+) -> Result<crate::render::frame_covering::RasterCoverings, ProjectionStateError> {
     let zoom = view_state.zoom().value();
     let mut regions = Vec::new();
     for group in source_layer_groups(style, TileKind::Raster) {

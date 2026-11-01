@@ -4,7 +4,7 @@ use crate::{
     context::MapContext,
     render::{
         eventually::{Eventually, Eventually::Initialized},
-        eye_covering::drawn_covering,
+        frame_covering::drawn_covering,
         tile_view_pattern::{ViewTileSources, WgpuTileViewPattern, DEFAULT_TILE_SIZE},
     },
     tcs::system::{SystemError, SystemResult},

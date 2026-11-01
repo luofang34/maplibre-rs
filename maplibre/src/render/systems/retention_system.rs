@@ -77,9 +77,6 @@ pub fn retention_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    if crate::render::eye_covering::EyeInFrame::reuses_content(world) {
-        return Ok(());
-    }
     let drawn = drawn_tiles(world).len();
     let in_use = tiles_in_use(world, style, view_state);
     drop_cancelled(world, &in_use);

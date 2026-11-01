@@ -1,6 +1,6 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
-use super::{drawn_covering, EyeInFrame};
+use super::drawn_covering;
 use crate::{
     coords::{LatLon, WorldCoords, WorldTileCoords, Zoom, TILE_SIZE},
     render::view_state::ViewState,
@@ -33,30 +33,7 @@ fn tiles(style: &Style, view: &ViewState, world: &mut World) -> Vec<WorldTileCoo
 }
 
 #[test]
-fn later_eyes_of_a_frame_draw_the_first_eyes_tiles() {
-    let style = style();
-    let mut world = World::default();
-    let (first, second) = (view(6.0), view(7.0));
-
-    world.resources.insert(EyeInFrame { index: 0, frame: 1 });
-    let chosen = tiles(&style, &first, &mut world);
-    world.resources.insert(EyeInFrame { index: 1, frame: 1 });
-    let reused = tiles(&style, &second, &mut world);
-    assert_eq!(
-        reused, chosen,
-        "the second eye draws what the first selected"
-    );
-
-    world.resources.insert(EyeInFrame { index: 1, frame: 2 });
-    let fresh = tiles(&style, &second, &mut world);
-    assert_ne!(
-        fresh, chosen,
-        "a selection is not carried into the next frame"
-    );
-}
-
-#[test]
-fn without_an_eye_every_view_selects_its_own_tiles() {
+fn every_view_selects_its_own_tiles() {
     let style = style();
     let mut world = World::default();
     let coarse = tiles(&style, &view(6.0), &mut world);

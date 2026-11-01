@@ -53,9 +53,7 @@ pub fn upload_system(
     if !matches!(pool_state, Initialized(_)) {
         return Err(SystemError::Dependencies);
     }
-    if settings.buffer_pools.is_empty()
-        || crate::render::eye_covering::EyeInFrame::reuses_content(world)
-    {
+    if settings.buffer_pools.is_empty() {
         return Ok(());
     }
     let (paint_frame, previous_paint) = frame_paint(world, style, view_state);

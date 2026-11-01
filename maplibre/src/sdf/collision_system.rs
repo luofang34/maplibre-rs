@@ -84,9 +84,7 @@ impl System for CollisionSystem {
             ..
         }: &mut MapContext,
     ) -> SystemResult {
-        if renderer.settings.symbol_pools.is_empty()
-            || crate::render::eye_covering::EyeInFrame::reuses_content(world)
-        {
+        if renderer.settings.symbol_pools.is_empty() {
             return Ok(());
         }
         self.runs = self.runs.wrapping_add(1);

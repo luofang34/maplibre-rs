@@ -1,8 +1,4 @@
-//! One tile covering for both eyes of a frame.
-//!
-//! Tile selection and content ingestion happen once per stereo frame. Each eye then draws
-//! that selection with its own projection, so a tile cannot change level or content between
-//! the left and right images.
+//! The tile covering a frame selects, and the history the next frame selects against.
 
 use crate::{
     coords::{ViewRegion, WorldTileCoords, ZoomLevel},
@@ -15,25 +11,6 @@ use crate::{
     style::Style,
     tcs::world::World,
 };
-
-/// Which eye of a frame the schedule is running for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EyeInFrame {
-    /// Position of the eye in the frame; the first eye selects the tiles.
-    pub index: usize,
-    /// The frame, so a selection is never reused across frames.
-    pub frame: u64,
-}
-
-impl EyeInFrame {
-    /// Whether this eye must reuse the content selected for an earlier eye of the frame.
-    pub(crate) fn reuses_content(world: &World) -> bool {
-        world
-            .resources
-            .get::<Self>()
-            .is_some_and(|eye| eye.index > 0)
-    }
-}
 
 /// Tiles per raster source, as [`raster_source_regions`] selects them.
 pub type RasterCoverings = Vec<(RasterSourceId, Vec<WorldTileCoords>)>;
@@ -49,13 +26,10 @@ pub(crate) struct FrameLodHistory {
     pub(crate) terrain: LodHistory,
 }
 
-/// Takes the snapshot for the frame about to select tiles. Every camera gets it, not only a
-/// host's eye: a map camera that moves a little each frame would otherwise switch a tile
-/// sitting on a level threshold between its fine and coarse version frame after frame.
+/// Takes the snapshot for the frame about to select tiles: a camera that moves a little each
+/// frame would otherwise switch a tile sitting on a level threshold between its fine and coarse
+/// version frame after frame.
 pub(crate) fn snapshot_lod_history(world: &mut World) {
-    if EyeInFrame::reuses_content(world) {
-        return;
-    }
     let shared = world.resources.get::<SharedCovering>();
     let history = FrameLodHistory {
         view: LodHistory::new(
@@ -77,26 +51,17 @@ pub(crate) fn snapshot_lod_history(world: &mut World) {
     world.resources.insert(history);
 }
 
-/// The drawn tiles a frame selected: the first eye's, which later eyes of the frame reuse, or
-/// the map camera's own.
+/// The drawn tiles a frame selected.
 #[derive(Clone, Debug)]
 pub struct SharedCovering {
-    /// The stereo frame whose eyes share the selection; none for a map camera's frame.
-    frame: Option<u64>,
     tiles: Option<(Vec<WorldTileCoords>, ZoomLevel)>,
     raster: RasterCoverings,
 }
 
 impl SharedCovering {
-    /// The tiles the first eye selected, or `None` when it selected no region.
+    /// The tiles selected, or `None` when no region was.
     pub(crate) fn tiles(&self) -> Option<&[WorldTileCoords]> {
         self.tiles.as_ref().map(|(tiles, _)| tiles.as_slice())
-    }
-
-    fn region(&self) -> Option<ViewRegion> {
-        self.tiles
-            .as_ref()
-            .map(|(tiles, level)| ViewRegion::from_tiles(tiles.clone(), *level, tiles.len()))
     }
 }
 
@@ -106,37 +71,23 @@ pub(crate) fn drawn_tiles(world: &World) -> Option<&[WorldTileCoords]> {
     world.resources.get::<SharedCovering>()?.tiles()
 }
 
-/// The tiles the frame draws at `level`, with the raster tiles each raster source draws:
-/// the first eye's selection when the schedule runs for a later eye of the same frame, and
-/// otherwise this view's own, kept as the next frame's level history.
+/// The tiles the frame draws at `level`, with the raster tiles each raster source draws, kept
+/// as the next frame's level history.
 pub(crate) fn drawn_covering(
     style: &Style,
     view_state: &ViewState,
     world: &mut World,
     level: ZoomLevel,
 ) -> Result<(Option<ViewRegion>, RasterCoverings), ProjectionStateError> {
-    let eye = world.resources.get::<EyeInFrame>().copied();
-    if let Some(eye) = eye.filter(|eye| eye.index > 0) {
-        if let Some(shared) = world
-            .resources
-            .get::<SharedCovering>()
-            .filter(|shared| shared.frame == Some(eye.frame))
-        {
-            return Ok((shared.region(), shared.raster.clone()));
-        }
-    }
     let region =
         view_region_for_projection(style, view_state, world, level, ViewStatePadding::Tight)?;
     let raster = raster_source_regions(style, view_state, world, ViewStatePadding::Tight)?;
-    if eye.is_none_or(|eye| eye.index == 0) {
-        world.resources.insert(SharedCovering {
-            frame: eye.map(|eye| eye.frame),
-            tiles: region
-                .as_ref()
-                .map(|region| (region.iter().collect(), region.zoom_level())),
-            raster: raster.clone(),
-        });
-    }
+    world.resources.insert(SharedCovering {
+        tiles: region
+            .as_ref()
+            .map(|region| (region.iter().collect(), region.zoom_level())),
+        raster: raster.clone(),
+    });
     Ok((region, raster))
 }
 

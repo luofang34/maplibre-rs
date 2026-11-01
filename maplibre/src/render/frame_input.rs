@@ -108,7 +108,7 @@ pub fn frame_input_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    super::eye_covering::snapshot_lod_history(world);
+    super::frame_covering::snapshot_lod_history(world);
     let Some(input) = world.resources.get::<FrameInput>() else {
         return Ok(());
     };

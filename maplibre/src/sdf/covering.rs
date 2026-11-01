@@ -119,17 +119,9 @@ pub(super) fn update(
     device: &wgpu::Device,
     queue: &crate::render::upload_queue::UploadQueue,
 ) {
-    let tiles = if crate::render::eye_covering::EyeInFrame::reuses_content(world) {
-        world
-            .resources
-            .get::<SymbolCovering>()
-            .map(|covering| covering.tiles.clone())
-            .unwrap_or_default()
-    } else {
-        select(&targets(world), |coords| {
-            ready(world, style, view.style_zoom().value(), coords)
-        })
-    };
+    let tiles = select(&targets(world), |coords| {
+        ready(world, style, view.style_zoom().value(), coords)
+    });
     let entries: Vec<_> = tiles.iter().map(|coords| metadata(*coords, view)).collect();
     let bytes = bytemuck::cast_slice(&entries);
     let required = (bytes.len() as u64).max(256);

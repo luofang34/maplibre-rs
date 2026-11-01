@@ -69,9 +69,9 @@ pub struct FrameSignals {
     dirty: bool,
     animating: bool,
     host_frame: u64,
-    /// The camera each eye drew last, by eye index; a map without eyes is eye 0.
-    cameras: Vec<[f64; 24]>,
-    /// Counts the frames whose first eye drew a camera other than the frame before.
+    /// The camera the last frame drew.
+    camera: Option<[f64; 24]>,
+    /// Counts the frames that drew a camera other than the frame before.
     camera_revision: u64,
 }
 
@@ -104,16 +104,8 @@ pub(crate) fn camera_moved(
     world
         .resources
         .get::<FrameSignals>()
-        .and_then(|signals| signals.cameras.get(eye_index(world)))
-        .is_some_and(|drawn| *drawn != camera_of(view_state))
-}
-
-/// The eye being drawn: its index in an XR frame, 0 otherwise.
-fn eye_index(world: &World) -> usize {
-    world
-        .resources
-        .get::<crate::render::eye_covering::EyeInFrame>()
-        .map_or(0, |eye| eye.index)
+        .and_then(|signals| signals.camera)
+        .is_some_and(|drawn| drawn != camera_of(view_state))
 }
 
 /// Charges a stage's CPU time to the current frame.
@@ -148,22 +140,13 @@ pub(crate) fn record_gpu_time(world: &mut World, host_frame: u64, spent: Duratio
     }
 }
 
-/// The host frame the frame being drawn belongs to: a new one, unless it is a later eye of
-/// an XR frame.
+/// The host frame the frame being drawn belongs to.
 pub(crate) fn host_frame_in_progress(world: &World) -> u64 {
-    let last = world
+    world
         .resources
         .get::<FrameSignals>()
-        .map_or(0, |signals| signals.host_frame);
-    let later_eye = world
-        .resources
-        .get::<crate::render::eye_covering::EyeInFrame>()
-        .is_some_and(|eye| eye.index > 0);
-    if later_eye {
-        last
-    } else {
-        last.wrapping_add(1)
-    }
+        .map_or(0, |signals| signals.host_frame)
+        .wrapping_add(1)
 }
 
 fn camera(context: &MapContext) -> [f64; 24] {
@@ -195,7 +178,6 @@ pub(crate) fn finish_frame(context: &mut MapContext) {
         .get::<crate::render::tracked_pass::RenderStats>()
         .map_or(0, |stats| stats.peek().draws);
     let drawn = camera(context);
-    let eye = eye_index(&context.world);
     let host_frame = host_frame_in_progress(&context.world);
     let signals = signals(&mut context.world);
     signals.host_frame = host_frame;
@@ -207,13 +189,10 @@ pub(crate) fn finish_frame(context: &mut MapContext) {
     finished.draws = draws;
     signals.last = finished;
     signals.dirty = std::mem::take(&mut signals.animating);
-    if eye == 0 && signals.cameras.first() != Some(&drawn) {
+    if signals.camera != Some(drawn) {
         signals.camera_revision = signals.camera_revision.wrapping_add(1);
     }
-    if signals.cameras.len() <= eye {
-        signals.cameras.resize(eye + 1, drawn);
-    }
-    signals.cameras[eye] = drawn;
+    signals.camera = Some(drawn);
     if let Some((signals, slot)) = context.world.resources.query_mut::<(
         &mut FrameSignals,
         &mut crate::render::frame_trace::FrameTraceSlot,
@@ -233,9 +212,7 @@ impl MapContext {
         let Some(signals) = self.world.resources.get::<FrameSignals>() else {
             return true;
         };
-        signals.dirty
-            || loading
-            || signals.cameras.get(eye_index(&self.world)) != Some(&camera(self))
+        signals.dirty || loading || signals.camera != Some(camera(self))
     }
 
     /// Changes whenever a frame draws the camera somewhere other than the frame before, from a

@@ -61,7 +61,7 @@ pub mod builder;
 pub mod camera;
 pub mod error;
 pub mod eventually;
-pub mod eye_covering;
+pub mod frame_covering;
 pub mod memory_budget;
 #[cfg(feature = "headless")]
 pub(crate) use systems::retention_system::RetainLoadedTiles;

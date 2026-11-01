@@ -8,7 +8,7 @@ use crate::{
     raster::resource::RasterResources,
     render::{
         eventually::{Eventually, Eventually::Initialized},
-        eye_covering::{drawn_covering, EyeInFrame},
+        frame_covering::drawn_covering,
         memory_budget::MemoryBudget,
         render_phase::{LayerItem, RenderPhase},
         tile_view_pattern::{WgpuTileViewPattern, DEFAULT_TILE_SIZE},
@@ -41,7 +41,6 @@ pub(crate) mod surface_covering;
 mod uniforms;
 use drape_phase::{background_clear_color, encode_drapes};
 use uniforms::present_ancestors;
-pub(crate) use uniforms::TerrainEyeFrame;
 
 /// Divisor of the tile circumference giving the skirt drop, as in GL JS `getSkirtLength`.
 const SKIRT_DIVISOR: f64 = 5.0;
@@ -101,10 +100,6 @@ pub fn queue_system(
             terrain.set_drape_mode(device, drape_mode);
         }
     }
-    if EyeInFrame::reuses_content(world) {
-        return uniforms::replay(world, style, view_state, queue);
-    }
-    world.resources.insert(TerrainEyeFrame::default());
     world
         .resources
         .insert(surface_covering::SurfaceTiles::default());
@@ -377,7 +372,7 @@ fn queue_tiles(
             sources,
         } = uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
         let edges = edge_cache.apply(&sources, &mut uniforms, &world.tiles);
-        let (sources, placed) =
+        let sources =
             uniforms::with_world_copies(&mut uniforms, sources, copies.as_ref(), view_state);
         terrain.write_edges(queue, &edges);
         let written = terrain.write_uniforms(queue, &uniforms);
@@ -409,8 +404,6 @@ fn queue_tiles(
         {
             index.set_surface_edges(&sources, std::sync::Arc::clone(&edge_cache.samples));
         }
-        let kept = placed.into_iter().zip(uniforms).take(written).collect();
-        world.resources.insert(TerrainEyeFrame(kept));
     }
     world.resources.insert(edge_cache);
 

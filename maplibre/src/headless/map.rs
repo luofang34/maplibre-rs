@@ -346,12 +346,6 @@ impl HeadlessMap {
         &self.map_context.view_state
     }
 
-    /// Mutable world access for tests that stage frame state.
-    #[cfg(test)]
-    pub(crate) fn world_mut(&mut self) -> &mut crate::tcs::world::World {
-        &mut self.map_context.world
-    }
-
     /// The renderer, for tests that look at its attachments.
     #[cfg(test)]
     pub(crate) fn renderer(&self) -> &crate::render::Renderer {
