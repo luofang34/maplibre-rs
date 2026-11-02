@@ -2,6 +2,7 @@
 use instant::Instant;
 use maplibre::{
     environment::Environment,
+    io::apc::AsyncProcedureCall,
     map::Map,
     render::frame_input::FrameInput,
     window::{HeadedMapWindow, MapWindow, MapWindowConfig, PhysicalSize},
@@ -63,6 +64,8 @@ where
             return;
         }
         if self.input.window_input(event, self.scale_factor) {
+            // The gesture is applied when the next frame updates the view.
+            self.map.window().request_redraw();
             return;
         }
         match event {
@@ -90,6 +93,7 @@ where
                 let size = self.map.window().size();
                 if let Ok(context) = self.map.context_mut() {
                     context.resize(size, self.scale_factor);
+                    self.map.window().request_redraw();
                 }
             }
             _ => {}
@@ -120,7 +124,41 @@ where
         if self.max_frames.is_some_and(|max| self.frame >= max) {
             target.exit();
         }
-        self.map.window().request_redraw();
+        let next = NextFrame {
+            map: self.map.needs_redraw(),
+            retry: self.map.has_scheduled_retries(),
+            arrivals: self.map.kernel().apc().has_arrivals(),
+            input: self.input.moved_view(),
+            counting_frames: self.max_frames.is_some(),
+        };
+        // An idle map draws nothing until an event or a change asks for a frame.
+        if next.wanted() {
+            self.map.window().request_redraw();
+        }
         Ok(())
     }
 }
+
+/// What decides whether the event loop asks for another frame after drawing one.
+#[derive(Clone, Copy, Debug, Default)]
+struct NextFrame {
+    /// The map changed, animates or still loads since the frame it drew.
+    map: bool,
+    /// A failed tile waits for its retry deadline, which only a frame notices.
+    retry: bool,
+    /// Worker results arrived that the next frame applies.
+    arrivals: bool,
+    /// Input moved the view, which inertia or a held key carries into the next frame.
+    input: bool,
+    /// The host asked for a number of frames, which are drawn whether or not anything changes.
+    counting_frames: bool,
+}
+
+impl NextFrame {
+    fn wanted(self) -> bool {
+        self.map || self.retry || self.arrivals || self.input || self.counting_frames
+    }
+}
+
+#[cfg(test)]
+mod tests;

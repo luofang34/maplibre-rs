@@ -19,6 +19,15 @@ where
         }
     }
 
+    /// Whether a failed tile request waits to be retried; see
+    /// [`crate::context::MapContext::has_scheduled_retries`].
+    pub fn has_scheduled_retries(&self) -> bool {
+        match &self.map_context {
+            CurrentMapContext::Ready(context) => context.has_scheduled_retries(),
+            CurrentMapContext::Pending(_) => false,
+        }
+    }
+
     /// The statistics of the last frame drawn.
     pub fn last_frame_stats(&self) -> FrameStats {
         match &self.map_context {

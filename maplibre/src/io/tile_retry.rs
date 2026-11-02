@@ -150,6 +150,16 @@ pub(crate) fn needs_frame(world: &World) -> bool {
     })
 }
 
+/// Whether a failed request waits for its retry deadline, which only a later frame notices.
+pub(crate) fn retry_scheduled(world: &World) -> bool {
+    world.tiles.tiles.values().any(|tile| {
+        world
+            .tiles
+            .query::<&TileRequestRetries>(tile.coords)
+            .is_some_and(|retries| retries.0.iter().any(|state| state.deadline.is_some()))
+    })
+}
+
 /// Requests every requested tile of `kind` again, keeping what it shows until the new data lands.
 pub(crate) fn refresh(world: &mut World, kind: RequestKind) {
     let coords: Vec<WorldTileCoords> = world.tiles.tiles.values().map(|tile| tile.coords).collect();
