@@ -12,6 +12,7 @@ use crate::{
             ProcedureError,
         },
         cpu_work::run_cpu_bound_replying,
+        frame_style::FrameStyle,
         source_type::SourceType,
         tile_backpressure::request_budget,
         tile_retry::{self, RequestDisposition, RequestKind, TileRequestOutcome},
@@ -26,6 +27,7 @@ use crate::{
         RasterLayersDataComponent, RasterSourceId,
     },
     render::{projection::raster_source_regions, view_state::ViewStatePadding},
+    style::Style,
     tcs::system::{System, SystemError, SystemResult},
 };
 
@@ -69,6 +71,7 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
             .into_iter()
             .map(|group| RasterSourceId::new(group.source_name))
             .collect();
+        let mut frame_style = FrameStyle::new(style);
         for coords in wanted {
             if !requested.insert(coords) {
                 continue;
@@ -97,7 +100,7 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
             budget -= 1;
 
             // One rejected tile must not cost the frame its other tiles.
-            if let Err(error) = self.request(coords, style, world) {
+            if let Err(error) = self.request(coords, &mut frame_style, world) {
                 tracing::warn!(%error, "tile request rejected; a later frame requests the tile again");
             }
         }
@@ -318,7 +321,7 @@ impl<E: Environment, T: RasterTransferables> RequestSystem<E, T> {
     fn request(
         &self,
         coords: crate::coords::WorldTileCoords,
-        style: &crate::style::Style,
+        style: &mut FrameStyle,
         world: &mut crate::tcs::world::World,
     ) -> SystemResult {
         let exists = world
@@ -332,7 +335,7 @@ impl<E: Environment, T: RasterTransferables> RequestSystem<E, T> {
         self.kernel
             .apc()
             .call(
-                Input::new(coords, style.clone(), attempt),
+                Input::new(coords, style.share(Style::clone), attempt),
                 fetch_raster_apc::<E::OffscreenKernelEnvironment, T, _>,
             )
             .map_err(|source| SystemError::TileRequest {
