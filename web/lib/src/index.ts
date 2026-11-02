@@ -28,7 +28,8 @@ export const startMapLibre = async (wasmPath: string | undefined, workerPath: st
         return
     }
 
-    if (WEBGL) {
+    // `?spector` opens the WebGL frame debugger; it would otherwise cover the map.
+    if (WEBGL && new URLSearchParams(location.search).has('spector')) {
         let spector = new Spector()
         spector.displayUI()
     }
