@@ -9,7 +9,7 @@ use wgpu::StoreOp;
 use crate::{
     render::{
         eventually::Eventually::{self, Initialized},
-        graph::{Node, NodeRunError, RenderContext, RenderGraphContext},
+        graph::{Node, RenderContext},
         RenderResources,
     },
     tcs::world::World,
@@ -149,13 +149,7 @@ impl crate::render::eventually::HasChanged for DepthCopyPipeline {
 pub struct DepthCopyNode;
 
 impl Node for DepthCopyNode {
-    fn run(
-        &self,
-        _graph: &mut RenderGraphContext,
-        render_context: &mut RenderContext,
-        state: &RenderResources,
-        world: &World,
-    ) -> Result<(), NodeRunError> {
+    fn run(&self, render_context: &mut RenderContext, state: &RenderResources, world: &World) {
         let target: Option<&wgpu::TextureView> =
             state
                 .eye_depth_target
@@ -165,14 +159,14 @@ impl Node for DepthCopyNode {
                     Eventually::Uninitialized => None,
                 });
         let Some(target) = target else {
-            return Ok(());
+            return;
         };
         let Initialized(depth_texture) = &state.depth_texture else {
-            return Ok(());
+            return;
         };
         let Some(Initialized(pipeline)) = world.resources.get::<Eventually<DepthCopyPipeline>>()
         else {
-            return Ok(());
+            return;
         };
         pipeline.copy(
             render_context.device,
@@ -180,6 +174,5 @@ impl Node for DepthCopyNode {
             &depth_texture.texture,
             target,
         );
-        Ok(())
     }
 }

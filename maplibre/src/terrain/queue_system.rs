@@ -105,7 +105,7 @@ pub fn queue_system(
         .insert(surface_covering::SurfaceTiles::default());
     let Some(dem) = dem_source(style) else {
         world.resources.insert(DrapePhase::default());
-        world.resources.insert(TerrainFrame::default());
+        set_frame(world, TerrainFrame::default());
         return Ok(());
     };
     let specs = target_specs(style, view_state, world)?;
@@ -143,11 +143,28 @@ pub fn queue_system(
         .max()
         .unwrap_or(0);
     world.resources.insert(phase);
-    world.resources.insert(TerrainFrame {
-        active: true,
-        draw_after_layer_index,
-    });
+    set_frame(
+        world,
+        TerrainFrame {
+            active: true,
+            draw_after_layer_index,
+        },
+    );
     Ok(())
+}
+
+/// Records whether the frame draws terrain, and hands the main pass its ground surface.
+fn set_frame(world: &mut World, frame: TerrainFrame) {
+    let ground = frame
+        .active
+        .then_some(crate::render::ground::GroundSurface {
+            draw_after_layer_index: frame.draw_after_layer_index,
+            draw: crate::terrain::draw_terrain,
+        });
+    world
+        .resources
+        .insert(crate::render::ground::FrameGround(ground));
+    world.resources.insert(frame);
 }
 
 fn hide_draped_layers(world: &mut World, style: &Style) {
