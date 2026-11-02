@@ -103,9 +103,9 @@ async fn frame_statistics_count_the_work_of_each_frame() {
         "the new tile's texture is uploaded: {loading:?}"
     );
     assert!(loading.draws > 0, "{loading:?}");
-    for stage in ["Extract", "Prepare", "Queue", "Render"] {
+    for stage in ["Input", "Prepare", "Queue", "Render"] {
         assert!(
-            loading.stages.iter().any(|(name, _)| name == stage),
+            loading.stages.iter().any(|(name, _)| &**name == stage),
             "{stage} is timed: {:?}",
             loading.stages
         );
@@ -158,7 +158,7 @@ async fn a_stage_is_charged_the_time_its_systems_take() {
     let twenty = std::time::Duration::from_millis(20);
     let mut slowed = Vec::new();
     for (label, name) in [
-        (RenderStageLabel::Extract, "Extract"),
+        (RenderStageLabel::Input, "Input"),
         (RenderStageLabel::Prepare, "Prepare"),
         (RenderStageLabel::Queue, "Queue"),
         (RenderStageLabel::Render, "Render"),
@@ -174,7 +174,7 @@ async fn a_stage_is_charged_the_time_its_systems_take() {
             let spent = stats
                 .stages
                 .iter()
-                .find(|(name, _)| name == stage)
+                .find(|(name, _)| &**name == *stage)
                 .map(|(_, spent)| *spent)
                 .expect("stage timed");
             assert!(spent >= twenty, "{stage} is not charged: {stats:?}");
