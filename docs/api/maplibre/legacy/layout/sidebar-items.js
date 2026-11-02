@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["layout","symbol_feature","symbol_instance","symbol_layout","symbol_projection"]};

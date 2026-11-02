@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["fetch_raster_apc"],"struct":["RequestSystem"]};
+window.SIDEBAR_ITEMS = {"fn":["fetch_raster_apc","image_bounds","send_image_tile","wanted_tiles"],"struct":["RequestSystem"]};

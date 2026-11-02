@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Kernel","KernelBuilder"]};
+window.SIDEBAR_ITEMS = {"enum":["KernelBuildError"],"struct":["Kernel","KernelBuilder"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DrawBackground","DrawBackgroundQuad","SetBackgroundPipeline"]};
+window.SIDEBAR_ITEMS = {"struct":["DrawAtmosphereFullscreen","DrawBackground","DrawBackgroundPattern","DrawBackgroundQuad","DrawGlobeBackgroundQuad","DrawSkyFullscreen","SetAtmospherePipeline","SetBackgroundPatternPipeline","SetBackgroundPipeline","SetGlobeBackgroundPatternPipeline","SetGlobeBackgroundPipeline","SetSkyPipeline"],"type":["DrawAtmosphere","DrawGlobeBackground","DrawGlobeBackgroundPattern","DrawSky"]};

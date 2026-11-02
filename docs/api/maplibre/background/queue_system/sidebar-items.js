@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["queue_system"],"struct":["BackgroundBuffers"]};
+window.SIDEBAR_ITEMS = {"fn":["atmosphere_blend","queue_system"]};

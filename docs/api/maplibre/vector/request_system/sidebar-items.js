@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["fetch_vector_apc"],"struct":["RequestSystem"]};
+window.SIDEBAR_ITEMS = {"fn":["depends_on_overscaling","display_pixel_ratio","is_current","pixel_ratio","refresh_only"],"mod":["group_tile","rescale","worker"],"struct":["RequestSystem"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["place_first_and_last_glyph","place_glyph_along_line","project","project_truncated_line_segment"],"struct":["PlacedGlyph","TileDistance"],"type":["PointAndCameraDistance"]};

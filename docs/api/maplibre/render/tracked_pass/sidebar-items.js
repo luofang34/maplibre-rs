@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BoundSlice","BoundState","DrawCapabilities","PassStats","RenderStats","TrackedRenderPass"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["get_glyph_range"],"struct":["AlphaImage","Glyph","GlyphMetrics","PositionedGlyph","PositionedLine","Shaping","WritingModeType"],"type":["GlyphDependencies","GlyphID","GlyphIDs","GlyphMap","GlyphRangeDependencies","Glyphs"]};

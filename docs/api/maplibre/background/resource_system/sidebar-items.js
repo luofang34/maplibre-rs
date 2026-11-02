@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["resource_system"],"struct":["BackgroundRenderPipeline"]};
+window.SIDEBAR_ITEMS = {"fn":["resource_system"],"struct":["AtmosphereRenderPipeline","BackgroundRenderPipeline","GlobeBackgroundRenderPipeline","SkyRenderPipeline"]};

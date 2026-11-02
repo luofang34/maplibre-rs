@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ROUND_HALF_ROWS","WIDTH"],"fn":["create_entry","dash_pixels","dash_scale","normalize_pattern","round_dash_pixels"],"mod":["image"],"struct":["DashEntry","LineDashResources"]};

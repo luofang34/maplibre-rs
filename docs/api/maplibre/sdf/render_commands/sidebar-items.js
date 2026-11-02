@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DrawSymbol","SetSymbolPipeline"],"type":["DrawSymbols"]};
+window.SIDEBAR_ITEMS = {"fn":["draw_indices"],"struct":["DrawSymbol","SetSymbolPipeline"],"type":["DrawSymbols"]};

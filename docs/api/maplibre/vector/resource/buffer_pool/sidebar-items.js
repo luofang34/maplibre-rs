@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEATURE_METADATA_SIZE","INDICES_SIZE","LAYER_METADATA_SIZE","VERTEX_SIZE"],"enum":["BackingBufferType"],"struct":["BackingBuffer","BufferPool","IndexEntry","RingIndex","RingIndexEntry"]};
+window.SIDEBAR_ITEMS = {"enum":["BackingBufferType"],"fn":["fitting_buffer_size"],"mod":["allocation_error","device","index","upload"],"struct":["BackingBuffer","BufferPool"],"type":["PatternRuns","SortRuns"]};

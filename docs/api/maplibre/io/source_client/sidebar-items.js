@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["HttpSourceClient","SourceClient","SourceFetchError"],"trait":["HttpClient"],"type":["HTTPClientFactory"]};
+window.SIDEBAR_ITEMS = {"struct":["ByteRange","HttpResponseError","HttpSourceClient","RangeOutOfBounds","SourceClient","SourceFetchError","TemporarySourceError","TileNotFound"],"trait":["HttpClient"],"type":["HTTPClientFactory"]};

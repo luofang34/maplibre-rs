@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["EphemeralQueryState","GlobalQueryState","Tile","TileSpawnResult","Tiles"],"trait":["ComponentQuery","ComponentQueryMut","ComponentQueryUnsafe","QueryState","TileComponent"]};
+window.SIDEBAR_ITEMS = {"mod":["sealed"],"struct":["Tile","TileSpawnResult","Tiles"],"trait":["ComponentQuery","ComponentQueryMut","ComponentQueryUnsafe","TileComponent"]};

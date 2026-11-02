@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["K_FORMATTED_SECTION_FONT_SCALE","K_FORMATTED_SECTION_TEXT_COLOR","K_FORMATTED_SECTION_TEXT_FONT"],"enum":["Value"],"struct":["EvaluationContext","Formatted","FormattedSection","Image"],"type":["FeatureState"]};

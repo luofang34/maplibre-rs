@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["MapContext"]};
+window.SIDEBAR_ITEMS = {"enum":["FlightOutcome"],"mod":["flight","ground"],"struct":["FlightId","MapContext"]};

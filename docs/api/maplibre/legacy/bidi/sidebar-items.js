@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["apply_arabic_shaping"],"struct":["BiDi"],"type":["Char16","StyledText"]};

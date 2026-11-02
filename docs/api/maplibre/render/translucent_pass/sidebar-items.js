@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["MainPassDriverNode","TranslucentPassNode"]};
+window.SIDEBAR_ITEMS = {"struct":["TranslucentPassNode"]};

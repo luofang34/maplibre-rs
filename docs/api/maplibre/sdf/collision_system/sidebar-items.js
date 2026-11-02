@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CollisionSystem"]};
+window.SIDEBAR_ITEMS = {"fn":["allocation","obstructed_grid","opacity_fingerprint","visible_layers"],"mod":["draw_sort","family","layer_pass","repeat_spacing","rules","temporal"],"struct":["CollisionStats","CollisionSystem"],"type":["VisibleLayer"]};

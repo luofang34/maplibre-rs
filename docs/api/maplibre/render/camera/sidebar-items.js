@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FLIP_Y","MAX_PITCH","MAX_YAW","MIN_PITCH","MIN_YAW","OPENGL_TO_WGPU_MATRIX"],"struct":["Camera","EdgeInsets","InvertedViewProjection","ModelViewProjection","Perspective","ViewProjection"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_MAX_PITCH","FLIP_Y","MAX_YAW","MIN_PITCH","MIN_YAW","OPENGL_TO_WGPU_MATRIX","REVERSED_Z"],"mod":["frustum"],"struct":["Camera","EdgeInsets","EyeFrustum","InvertedViewProjection","ModelViewProjection","Perspective","ViewProjection","ViewProjectionError"]};

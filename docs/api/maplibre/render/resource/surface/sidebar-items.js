@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Head"],"fn":["strip_srgb"],"struct":["BufferDimensions","BufferedTextureHead","Surface","WindowHead"]};
+window.SIDEBAR_ITEMS = {"enum":["Head"],"mod":["acquisition","offscreen","window"],"struct":["Surface"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["FeatureType"],"struct":["GeometryCoordinates","SymbolGeometryTileData","SymbolGeometryTileLayer"],"type":["GeometryCollection","GeometryCoordinate","Identifier","PropertyMap","Value"]};

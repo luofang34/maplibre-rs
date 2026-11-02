@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TilePipeline"]};
+window.SIDEBAR_ITEMS = {"constant":["OVERDRAW_FRAGMENT"],"fn":["counting_overdraw"],"struct":["TilePipeline","TilePipelineOptions"]};
