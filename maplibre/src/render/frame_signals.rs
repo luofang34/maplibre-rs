@@ -173,6 +173,13 @@ pub(crate) fn finish_frame(context: &mut MapContext) {
         .resources
         .get_or_init_mut::<crate::tcs::system::timings::FrameTimings>()
         .take_stage_times();
+    if let Some(uploads) = context
+        .world
+        .resources
+        .get_mut::<crate::render::memory_budget::FrameUploads>()
+    {
+        uploads.reset();
+    }
     let draws = context
         .world
         .resources
