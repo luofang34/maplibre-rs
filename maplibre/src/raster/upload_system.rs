@@ -11,6 +11,7 @@ use crate::{
     },
     render::{
         eventually::{Eventually, Eventually::Initialized},
+        memory_budget::{FrameUploads, UploadKind},
         Renderer,
     },
     tcs::{
@@ -26,31 +27,46 @@ pub fn upload_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    let Some(Initialized(raster_resources)) = world
+    world.resources.get_or_init_mut::<FrameUploads>();
+    let Some((Initialized(raster_resources), budget)) = world
         .resources
-        .query_mut::<&mut Eventually<RasterResources>>()
+        .query_mut::<(&mut Eventually<RasterResources>, &mut FrameUploads)>()
     else {
         return Err(SystemError::Dependencies);
     };
 
-    // Every loaded tile gets its texture, as GL JS uploads a raster tile when it arrives; the
-    // retention system bounds the set by evicting tiles that left the view.
+    // Every loaded tile gets its texture, as GL JS uploads a raster tile when it arrives, as
+    // far as the frame's image floor reaches; the retention system bounds the set by evicting
+    // tiles that left the view.
     let source_tiles: BTreeSet<WorldTileCoords> =
         world.tiles.tiles.values().map(|tile| tile.coords).collect();
-    upload_raster_layer(raster_resources, device, queue, &world.tiles, source_tiles);
+    let deferred = upload_raster_layer(
+        raster_resources,
+        (device, queue),
+        &world.tiles,
+        source_tiles,
+        budget,
+    );
+    if deferred {
+        crate::render::frame_signals::keep_animating(world);
+    }
 
     Ok(())
 }
 
+/// Uploads the textures of loaded tiles that the frame's budget admits; `true` when some wait
+/// for a later frame.
 #[tracing::instrument(skip_all)]
 fn upload_raster_layer(
     raster_resources: &mut RasterResources,
-    device: &wgpu::Device,
-    queue: &crate::render::upload_queue::UploadQueue,
+    (device, queue): (&wgpu::Device, &crate::render::upload_queue::UploadQueue),
     tiles: &Tiles,
     source_tiles: BTreeSet<WorldTileCoords>,
-) {
-    for coords in source_tiles {
+    budget: &mut FrameUploads,
+) -> bool {
+    let mut mipmapped = Vec::new();
+    let mut deferred = false;
+    'tiles: for coords in source_tiles {
         let Some(layers) = tiles.query::<&RasterLayersDataComponent>(coords) else {
             continue;
         };
@@ -62,11 +78,22 @@ fn upload_raster_layer(
                         .get_bound_texture(&data.source, &coords)
                         .is_none()
                 {
-                    upload_image(raster_resources, device, queue, tiles, data);
+                    if !budget.take(UploadKind::Image, data.image.as_raw().len()) {
+                        deferred = true;
+                        break 'tiles;
+                    }
+                    if let Some(texture) =
+                        upload_image(raster_resources, device, queue, tiles, data)
+                    {
+                        mipmapped.push(texture);
+                    }
                 }
             }
         }
     }
+    // One submission fills every new texture's mip chain.
+    raster_resources.generate_mipmaps(device, queue, &mipmapped);
+    deferred
 }
 
 /// The image of `source` loaded at each tile around `coords`, indexed `[dy + 1][dx + 1]`.
@@ -89,13 +116,15 @@ fn neighbour_images<'a>(
     images
 }
 
+/// Uploads and binds the tile's texture; returns the texture when its mip chain is still to be
+/// filled.
 fn upload_image(
     raster_resources: &mut RasterResources,
     device: &wgpu::Device,
     queue: &crate::render::upload_queue::UploadQueue,
     tiles: &Tiles,
     data: &AvailableRasterLayerData,
-) {
+) -> Option<wgpu::Texture> {
     let bordered;
     let mut border_sides = None;
     let image = if raster_resources.has_border(&data.source) {
@@ -141,11 +170,10 @@ fn upload_image(
         texture.size,
     );
 
-    if mipmapped {
-        raster_resources.generate_mipmaps(device, queue, &texture);
-    }
+    let mips = mipmapped.then(|| texture.texture.clone());
     raster_resources.bind_texture(device, &data.source, &data.coords, texture);
     if let Some(sides) = border_sides {
         raster_resources.set_border_sides(&data.source, data.coords, sides);
     }
+    mips
 }
