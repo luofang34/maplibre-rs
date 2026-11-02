@@ -142,14 +142,17 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
                 budget -= 1;
 
                 let only_sources = refresh_only(world, coords, laid_out_for);
-                self.request(
+                // One rejected tile must not cost the frame its other tiles.
+                if let Err(error) = self.request(
                     coords,
                     style,
                     world,
                     (overscaled_zoom, pixel_ratio),
                     only_sources,
                     (vectors_disabled, symbols_disabled),
-                )?;
+                ) {
+                    tracing::warn!(%error, "tile request rejected; a later frame requests the tile again");
+                }
             }
             tile_retry::want(world, RequestKind::Vector, &requested);
             self.release_unwanted(world, &requested);

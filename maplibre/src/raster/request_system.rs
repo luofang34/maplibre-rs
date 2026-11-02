@@ -95,7 +95,10 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
             }
             budget -= 1;
 
-            self.request(coords, style, world)?;
+            // One rejected tile must not cost the frame its other tiles.
+            if let Err(error) = self.request(coords, style, world) {
+                tracing::warn!(%error, "tile request rejected; a later frame requests the tile again");
+            }
         }
         tile_retry::want(world, RequestKind::Raster, &requested);
 
