@@ -10,7 +10,6 @@ use crate::{
         eventually::{Eventually, Eventually::Initialized},
         frame_covering::drawn_covering,
         memory_budget::MemoryBudget,
-        render_phase::{LayerItem, RenderPhase},
         tile_view_pattern::{WgpuTileViewPattern, DEFAULT_TILE_SIZE},
         view_state::ViewState,
         Renderer,
@@ -22,7 +21,7 @@ use crate::{
     },
     terrain::{
         drape_cache::{fingerprint, DrapeState, SourceContent},
-        drape_targets::{collect_layer_specs, is_drapeable, select_targets, TargetSpec},
+        drape_targets::{collect_layer_specs, select_targets, TargetSpec},
         resources::{TerrainDraw, TerrainResources, UNIFORM_STRIDE},
         source::{dem_source, DemSource},
         DrapePhase, TerrainFrame,
@@ -37,9 +36,11 @@ mod readiness;
 mod targets;
 pub(crate) use targets::target_specs;
 mod drape_phase;
+mod frame;
 pub(crate) mod surface_covering;
 mod uniforms;
 use drape_phase::{background_clear_color, encode_drapes};
+use frame::{hide_draped_layers, set_frame};
 use uniforms::present_ancestors;
 
 /// Divisor of the tile circumference giving the skirt drop, as in GL JS `getSkirtLength`.
@@ -105,7 +106,7 @@ pub fn queue_system(
         .insert(surface_covering::SurfaceTiles::default());
     let Some(dem) = dem_source(style) else {
         world.resources.insert(DrapePhase::default());
-        world.resources.insert(TerrainFrame::default());
+        set_frame(world, TerrainFrame::default());
         return Ok(());
     };
     let specs = target_specs(style, view_state, world)?;
@@ -143,23 +144,14 @@ pub fn queue_system(
         .max()
         .unwrap_or(0);
     world.resources.insert(phase);
-    world.resources.insert(TerrainFrame {
-        active: true,
-        draw_after_layer_index,
-    });
+    set_frame(
+        world,
+        TerrainFrame {
+            active: true,
+            draw_after_layer_index,
+        },
+    );
     Ok(())
-}
-
-fn hide_draped_layers(world: &mut World, style: &Style) {
-    let drapeable: HashSet<&str> = style
-        .layers
-        .iter()
-        .filter(|layer| is_drapeable(&layer.type_))
-        .map(|layer| layer.id.as_str())
-        .collect();
-    if let Some(layer_phase) = world.resources.get_mut::<RenderPhase<LayerItem>>() {
-        layer_phase.retain(|item| !drapeable.contains(item.style_layer.as_str()));
-    }
 }
 
 /// Which of the acquired drapes to draw this frame, at most `budget`: tiles never drawn
