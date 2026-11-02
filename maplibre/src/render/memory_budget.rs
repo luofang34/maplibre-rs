@@ -1,6 +1,6 @@
 //! What the host's memory lets a frame keep.
 //!
-//! A headset can terminate memory-heavy processes. A flight to the ground brings a hundred
+//! A mobile device can terminate memory-heavy processes. A flight to the ground brings a hundred
 //! drawn tiles, each with a drape texture, and a burst of tile uploads, and that alone can
 //! carry the footprint past the limit. The host reports how much memory is still available
 //! each frame; below a reserve the frame goes carefully: only the nearest tiles keep a drape

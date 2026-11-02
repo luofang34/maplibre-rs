@@ -1,4 +1,4 @@
-//! Zero-drape procedural relief controls and stitched resident DEM patch export.
+//! Terrain drape controls and stitched resident DEM patch export.
 
 use std::sync::Arc;
 
@@ -7,7 +7,7 @@ use crate::{
     coords::WorldTileCoords,
     render::{
         eventually::{Eventually, Eventually::Initialized},
-        settings::{ProceduralReliefStyle, TerrainDrapeMode},
+        settings::TerrainDrapeMode,
     },
     terrain::{
         coverage::TerrainCoverageIndex, dem::DemTile, mesh::TERRAIN_MESH_SIZE,
@@ -38,8 +38,7 @@ pub struct TerrainPatchSnapshot {
     pub exaggeration: f32,
     /// `true` when rendered neighbor `EdgeHeights` were applied along the patch boundary.
     pub stitched_to_neighbors: bool,
-    /// Resident mipmapped drape texture covering `coords` (its own or nearest resident ancestor)
-    /// when [`TerrainDrapeMode::Draped`] is active; `None` in [`TerrainDrapeMode::ProceduralRelief`].
+    /// Resident mipmapped drape texture covering `coords` (its own or nearest resident ancestor).
     pub drape_texture: Option<wgpu::Texture>,
 }
 
@@ -70,16 +69,12 @@ impl HeadlessMap {
             })
     }
 
-    /// Switches between baked 2D style drapes ([`TerrainDrapeMode::Draped`]) and zero-drape
-    /// procedural DEM shading ([`TerrainDrapeMode::ProceduralRelief`]).
-    ///
-    /// Switching to `ProceduralRelief` immediately releases any allocated `DrapeScratch` and
-    /// `DrapeCache` textures.
+    /// Switches the terrain's [`TerrainDrapeMode`]; a new drape size releases the textures
+    /// baked at the old one.
     pub fn set_terrain_drape_mode(&mut self, mode: TerrainDrapeMode) {
         self.map_context.renderer.settings.terrain_drape_mode = mode;
-        if let TerrainDrapeMode::Draped { edge_px } = mode {
-            self.map_context.renderer.settings.terrain_drape_size = edge_px;
-        }
+        let TerrainDrapeMode::Draped { edge_px } = mode;
+        self.map_context.renderer.settings.terrain_drape_size = edge_px;
         self.map_context.world.resources.insert(mode);
         if let Some(Initialized(terrain)) = self
             .map_context
@@ -90,17 +85,6 @@ impl HeadlessMap {
             terrain.set_drape_mode(&self.map_context.renderer.device, mode);
         }
         crate::render::frame_signals::mark_dirty(&mut self.map_context.world);
-    }
-
-    /// Updates the TAWS reference altitude (metres MSL) in [`TerrainDrapeMode::ProceduralRelief`]
-    /// without reallocating GPU resources. Has no effect when in [`TerrainDrapeMode::Draped`].
-    pub fn set_procedural_relief_reference_altitude(&mut self, altitude_meters: Option<f32>) {
-        if let TerrainDrapeMode::ProceduralRelief(mut style) = self.terrain_drape_mode() {
-            style.reference_altitude_meters = altitude_meters;
-            self.set_terrain_drape_mode(TerrainDrapeMode::ProceduralRelief(style));
-        } else {
-            let _ = ProceduralReliefStyle::default();
-        }
     }
 
     /// Exports a stitched `129 × 129` (`TERRAIN_MESH_SIZE + 1`) elevation grid and optional
@@ -117,28 +101,24 @@ impl HeadlessMap {
             .unwrap_or(&empty_index);
         let grid = index.stitched_patch_grid(&context.world.tiles, coords, fallback_dem)?;
 
-        let drape_texture = if self.terrain_drape_mode().is_procedural_relief() {
-            None
-        } else {
-            match context
-                .world
-                .resources
-                .get::<Eventually<TerrainResources>>()
-            {
-                Some(Initialized(terrain)) => {
-                    let mut cur = Some(coords);
-                    let mut found = None;
-                    while let Some(c) = cur {
-                        if let Some(tex) = terrain.drape_texture(c) {
-                            found = Some(tex.texture.clone());
-                            break;
-                        }
-                        cur = c.get_parent();
+        let drape_texture = match context
+            .world
+            .resources
+            .get::<Eventually<TerrainResources>>()
+        {
+            Some(Initialized(terrain)) => {
+                let mut cur = Some(coords);
+                let mut found = None;
+                while let Some(c) = cur {
+                    if let Some(tex) = terrain.drape_texture(c) {
+                        found = Some(tex.texture.clone());
+                        break;
                     }
-                    found
+                    cur = c.get_parent();
                 }
-                _ => None,
+                found
             }
+            _ => None,
         };
 
         Some(TerrainPatchSnapshot {

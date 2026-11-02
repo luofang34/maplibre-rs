@@ -33,8 +33,6 @@ pub struct CollisionSystem {
     history: temporal::PlacementHistory,
     uploaded: HashMap<(WorldTileCoords, String), (u64, u64)>,
     draw_sort: draw_sort::DrawSort,
-    /// Revision of the host's label obstacles the last placement kept clear.
-    obstacles: u64,
 }
 
 /// World-level counter recording how many times [`CollisionSystem`] has executed.
@@ -84,9 +82,7 @@ impl System for CollisionSystem {
             ..
         }: &mut MapContext,
     ) -> SystemResult {
-        if renderer.settings.symbol_pools.is_empty()
-            || crate::render::eye_covering::EyeInFrame::reuses_content(world)
-        {
+        if renderer.settings.symbol_pools.is_empty() {
             return Ok(());
         }
         self.runs = self.runs.wrapping_add(1);
@@ -106,7 +102,7 @@ impl System for CollisionSystem {
                     .map(|entry| entry.0)
         });
         let view = (view_state.view_projection().0, view_state.viewport_size());
-        // A head-tracked view changes every frame, so it keeps the periodic cadence instead of
+        // An external view changes every frame, so it keeps the periodic cadence instead of
         // placing every label each frame.
         let moved = !view_state.has_external_view()
             && AsRef::<[[f64; 4]; 4]>::as_ref(&view.0)
@@ -114,20 +110,9 @@ impl System for CollisionSystem {
                 .flatten()
                 .all(|value| value.is_finite())
             && self.placed_view.as_ref() != Some(&view);
-        let obstacles = world
-            .resources
-            .get::<super::obstacles::LabelObstacles>()
-            .map_or(0, super::obstacles::LabelObstacles::revision);
-        let obstructed = obstacles != self.obstacles;
-        if !new_content
-            && !moved
-            && !obstructed
-            && !self.history.fading
-            && !self.runs.is_multiple_of(8)
-        {
+        if !new_content && !moved && !self.history.fading && !self.runs.is_multiple_of(8) {
             return Ok(());
         }
-        self.obstacles = obstacles;
         self.placed_view = Some(view);
         self.draw_sort.follow_bearing(
             world,
@@ -216,20 +201,6 @@ fn visible_layers<'a>(
     layers
 }
 
-/// The collision grid of a `width` by `height` view, holding the host's obstacles before any
-/// label, so labels are placed around them.
-fn obstructed_grid(
-    width: f64,
-    height: f64,
-    obstacles: Option<&super::obstacles::LabelObstacles>,
-) -> CollisionGrid {
-    let mut grid = CollisionGrid::new(width, height);
-    for &rect in obstacles.map_or(&[][..], super::obstacles::LabelObstacles::boxes) {
-        grid.insert_as(rect, false);
-    }
-    grid
-}
-
 fn allocation(world: &crate::tcs::world::World, coords: WorldTileCoords, id: &str) -> Option<u64> {
     let Initialized(pool) = world.resources.get::<Eventually<SymbolBufferPool>>()? else {
         return None;
@@ -251,11 +222,7 @@ impl CollisionSystem {
         queue: &crate::render::upload_queue::UploadQueue,
         layers: Vec<VisibleLayer<'_>>,
     ) -> PlacedSymbols {
-        let mut boxes = obstructed_grid(
-            view_state.width(),
-            view_state.height(),
-            world.resources.get::<super::obstacles::LabelObstacles>(),
-        );
+        let mut boxes = CollisionGrid::new(view_state.width(), view_state.height());
         let mut updates = Vec::new();
         let mut placed = PlacedSymbols::default();
         let mut groups: Vec<(

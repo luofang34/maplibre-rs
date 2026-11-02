@@ -31,25 +31,4 @@ impl HeadlessMap {
             layers,
         )
     }
-
-    /// Screen areas the host draws over the map, where no label is placed; see
-    /// [`crate::sdf::obstacles::LabelObstacles`].
-    pub fn set_label_obstacles(&mut self, boxes: Vec<[f64; 4]>) {
-        let world = &mut self.map_context.world;
-        let changed = match world
-            .resources
-            .get_mut::<crate::sdf::obstacles::LabelObstacles>()
-        {
-            Some(obstacles) => obstacles.replace(boxes),
-            None => {
-                let mut obstacles = crate::sdf::obstacles::LabelObstacles::default();
-                let changed = obstacles.replace(boxes);
-                world.resources.insert(obstacles);
-                changed
-            }
-        };
-        if changed {
-            crate::render::frame_signals::mark_dirty(world);
-        }
-    }
 }

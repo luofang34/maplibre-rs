@@ -118,26 +118,17 @@ impl<E: Environment, T: DemTransferables> System for RequestSystem<E, T> {
         let Some(dem) = dem_source(style) else {
             return Ok(());
         };
-        let multi = world
-            .resources
-            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
-            .filter(|m| m.active)
-            .cloned();
-        let terrain_tiles = if let Some(multi) = &multi {
-            multi.terrain_tiles.clone()
-        } else {
-            let Some(view_region) = crate::render::projection::terrain_region(
-                style,
-                view_state,
-                world,
-                dem.tile_size,
-                ViewStatePadding::Tight,
-            )?
-            else {
-                return Ok(());
-            };
-            view_region.iter().collect()
+        let Some(view_region) = crate::render::projection::terrain_region(
+            style,
+            view_state,
+            world,
+            dem.tile_size,
+            ViewStatePadding::Tight,
+        )?
+        else {
+            return Ok(());
         };
+        let terrain_tiles: Vec<_> = view_region.iter().collect();
 
         let mut requested = HashSet::new();
         let mut budget = request_budget(world);
@@ -178,9 +169,6 @@ impl<E: Environment, T: DemTransferables> System for RequestSystem<E, T> {
             }
             budget -= 1;
             self.request(coords, style, world)?;
-        }
-        if let Some(multi) = &multi {
-            requested.extend(multi.skipped_wanted_dem.iter().copied());
         }
         tile_retry::want(world, RequestKind::Dem, &requested);
 

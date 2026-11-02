@@ -8,7 +8,7 @@ use crate::{
     raster::resource::RasterResources,
     render::{
         eventually::{Eventually, Eventually::Initialized},
-        eye_covering::{drawn_covering, EyeInFrame},
+        frame_covering::drawn_covering,
         memory_budget::MemoryBudget,
         render_phase::{LayerItem, RenderPhase},
         tile_view_pattern::{WgpuTileViewPattern, DEFAULT_TILE_SIZE},
@@ -35,13 +35,12 @@ pub(crate) mod edges;
 mod prefetch;
 mod readiness;
 mod targets;
-pub(crate) use targets::{procedural_specs, target_specs};
+pub(crate) use targets::target_specs;
 mod drape_phase;
 pub(crate) mod surface_covering;
 mod uniforms;
 use drape_phase::{background_clear_color, encode_drapes};
 use uniforms::present_ancestors;
-pub(crate) use uniforms::TerrainEyeFrame;
 
 /// Divisor of the tile circumference giving the skirt drop, as in GL JS `getSkirtLength`.
 const SKIRT_DIVISOR: f64 = 5.0;
@@ -101,10 +100,6 @@ pub fn queue_system(
             terrain.set_drape_mode(device, drape_mode);
         }
     }
-    if EyeInFrame::reuses_content(world) {
-        return uniforms::replay(world, style, view_state, queue);
-    }
-    world.resources.insert(TerrainEyeFrame::default());
     world
         .resources
         .insert(surface_covering::SurfaceTiles::default());
@@ -113,32 +108,23 @@ pub fn queue_system(
         world.resources.insert(TerrainFrame::default());
         return Ok(());
     };
-    let (phase, surface_specs, surface_sources) = if drape_mode.is_procedural_relief() {
-        let specs = procedural_specs(style, view_state, world)?;
-        let sources = vec![None; specs.len()];
-        (DrapePhase::default(), specs, sources)
-    } else {
-        let specs = target_specs(style, view_state, world)?;
-        let PreparedDrapes {
-            redraw,
-            sources,
-            clear_color,
-        } = prepare_drapes(&specs, style, view_state, world, device)?;
-        let paint_zoom = crate::vector::upload_system::paint::current_zoom(
-            world,
-            view_state.style_zoom().value(),
-        );
-        let phase = encode_drapes(
-            &specs,
-            &redraw,
-            clear_color,
-            world,
-            crate::coords::Zoom::new(paint_zoom),
-            queue,
-        )?;
-        let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
-        (phase, surface_specs, surface_sources)
-    };
+    let specs = target_specs(style, view_state, world)?;
+    let PreparedDrapes {
+        redraw,
+        sources,
+        clear_color,
+    } = prepare_drapes(&specs, style, view_state, world, device)?;
+    let paint_zoom =
+        crate::vector::upload_system::paint::current_zoom(world, view_state.style_zoom().value());
+    let phase = encode_drapes(
+        &specs,
+        &redraw,
+        clear_color,
+        world,
+        crate::coords::Zoom::new(paint_zoom),
+        queue,
+    )?;
+    let (surface_specs, surface_sources) = surface_covering::for_frame(world, &specs, &sources);
     queue_tiles(
         world,
         style,
@@ -168,9 +154,7 @@ fn hide_draped_layers(world: &mut World, style: &Style) {
     let drapeable: HashSet<&str> = style
         .layers
         .iter()
-        .filter(|layer| {
-            is_drapeable(&layer.type_) && crate::vector::structures::kind(layer).is_none()
-        })
+        .filter(|layer| is_drapeable(&layer.type_))
         .map(|layer| layer.id.as_str())
         .collect();
     if let Some(layer_phase) = world.resources.get_mut::<RenderPhase<LayerItem>>() {
@@ -260,7 +244,7 @@ fn loaded_content(world: &World) -> LoadedContent<'_> {
 mod tests;
 
 fn acquire_drapes(
-    (specs, extra_retained): (&[TargetSpec], Option<&HashSet<WorldTileCoords>>),
+    specs: &[TargetSpec],
     prints: &[u64],
     ready: &[bool],
     memory: MemoryBudget,
@@ -268,13 +252,9 @@ fn acquire_drapes(
     terrain: &mut TerrainResources,
     device: &wgpu::Device,
 ) -> (Vec<bool>, Vec<Option<WorldTileCoords>>, bool) {
-    let keep = covering::retained_textures(
-        specs
-            .iter()
-            .map(|spec| spec.coords)
-            .chain(extra_retained.into_iter().flatten().copied()),
-        |coords| terrain.drape_texture(coords).is_some(),
-    );
+    let keep = covering::retained_textures(specs.iter().map(|spec| spec.coords), |coords| {
+        terrain.drape_texture(coords).is_some()
+    });
     terrain.retain_drapes(&keep);
     // Unready tiles keep their last valid texture or a background surface.
     if memory.is_tight() {
@@ -381,7 +361,7 @@ fn queue_tiles(
             sources,
         } = uniforms::prepare_tiles(targets, style, view_state, terrain, (dem, skirts, lighting));
         let edges = edge_cache.apply(&sources, &mut uniforms, &world.tiles);
-        let (sources, placed) =
+        let sources =
             uniforms::with_world_copies(&mut uniforms, sources, copies.as_ref(), view_state);
         terrain.write_edges(queue, &edges);
         let written = terrain.write_uniforms(queue, &uniforms);
@@ -413,8 +393,6 @@ fn queue_tiles(
         {
             index.set_surface_edges(&sources, std::sync::Arc::clone(&edge_cache.samples));
         }
-        let kept = placed.into_iter().zip(uniforms).take(written).collect();
-        world.resources.insert(TerrainEyeFrame(kept));
     }
     world.resources.insert(edge_cache);
 
@@ -485,10 +463,6 @@ fn prepare_drapes(
     } else {
         limit
     };
-    let extra_retained = world
-        .resources
-        .get::<crate::render::eye_covering::SlotResidencyFloor>()
-        .map(|floor| floor.retained_drapes.clone());
     let (redraw, drape_sources, deferred) = {
         let Some(Initialized(terrain)) = world.resources.get_mut::<Eventually<TerrainResources>>()
         else {
@@ -496,7 +470,7 @@ fn prepare_drapes(
         };
         terrain.ensure_scratch(device);
         acquire_drapes(
-            (specs, extra_retained.as_ref()),
+            specs,
             &prints,
             &ready,
             memory,

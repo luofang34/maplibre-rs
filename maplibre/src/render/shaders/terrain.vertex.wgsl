@@ -13,8 +13,6 @@ struct VertexOutput {
     // The ground's geographic up in globe world axes, which the sun's elevation is measured
     // from on the globe and the flat map alike.
     @location(5) globe_normal: vec3<f32>,
-    // Unskirted stitched terrain elevation in metres MSL for procedural relief & TAWS bands.
-    @location(6) surface_elevation: f32,
     @builtin(position) clip_position: vec4<f32>,
 };
 
@@ -58,7 +56,6 @@ fn main(
     let height_gradient = terrain_height_gradient(position);
     let stitched = select(stitched_elevation(position, height_gradient.x), 0.0, north_cap || south_cap);
     let elevation = stitched - f32(skirt.x) * terrain_tile.skirt_length;
-    let msl_elevation = stitched / max(terrain_tile.exaggeration, 1e-4);
     var projected = project_tile_position_3d(
         vec3<f32>(surface_position_2d, elevation),
         terrain_tile.transform,
@@ -86,7 +83,6 @@ fn main(
             -position.y * terrain_tile.fog_position.w, elevation),
         select(0.0, 1.0, north_cap || south_cap),
         tile_position_on_unit_sphere(surface_position_2d, terrain_tile.tile_mercator_coords),
-        msl_elevation,
         projected.clip_position,
     );
 }

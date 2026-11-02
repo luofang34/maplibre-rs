@@ -60,16 +60,7 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
         // Missing ancestors and deferred tiles must progress while the camera is stationary.
         // Each raster source covers the view at its own tile size and rounding, as GL JS's
         // per-source tile managers do; the tiles of every source are requested together.
-        let multi = world
-            .resources
-            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
-            .filter(|m| m.active)
-            .cloned();
-        let regions = if let Some(multi) = &multi {
-            multi.raster_regions.clone()
-        } else {
-            raster_source_regions(style, view_state, world, ViewStatePadding::Loose)?
-        };
+        let regions = raster_source_regions(style, view_state, world, ViewStatePadding::Loose)?;
         let mut requested = HashSet::new();
         let mut budget = request_budget(world);
         let wanted = wanted_tiles(regions, style, world);
@@ -105,9 +96,6 @@ impl<E: Environment, T: RasterTransferables> System for RequestSystem<E, T> {
             budget -= 1;
 
             self.request(coords, style, world)?;
-        }
-        if let Some(multi) = &multi {
-            requested.extend(multi.skipped_wanted_raster.iter().copied());
         }
         tile_retry::want(world, RequestKind::Raster, &requested);
 

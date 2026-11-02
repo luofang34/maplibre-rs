@@ -13,8 +13,6 @@ use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Rad, Rotation3, Vector3, 
 use crate::{
     coords::{LatLon, WorldCoords, Zoom, TILE_SIZE},
     projection::{body::Body, globe::angular_radians_to_unit_sphere},
-    render::eye_covering::{CurrentViewSlot, ViewSlotId},
-    tcs::world::World,
 };
 
 /// Vertical datum for [`Placement3d::altitude_meters`].
@@ -126,77 +124,6 @@ impl Orientation3d {
     }
 }
 
-/// Bitmask controlling per-[`ViewSlotId`] visibility for 3D entities (slots `0..64`).
-///
-/// For example, `ViewSlotMask::ALL.without(otw_slot)` hides ownship's exterior 3D airframe in
-/// `ViewSlot 0` (Cockpit OTW) while keeping it visible in `ViewSlot 1` (Chase / External camera).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ViewSlotMask(pub u64);
-
-impl Default for ViewSlotMask {
-    fn default() -> Self {
-        Self::ALL
-    }
-}
-
-impl ViewSlotMask {
-    /// Visible in every [`ViewSlotId`] and on the default single-view head.
-    pub const ALL: Self = Self(u64::MAX);
-    /// Hidden in every [`ViewSlotId`] and on the default single-view head.
-    pub const NONE: Self = Self(0);
-
-    /// Visible exclusively in `slot` (`slot.as_u32() < 64`).
-    pub const fn only(slot: ViewSlotId) -> Self {
-        let idx = slot.as_u32();
-        if idx < 64 {
-            Self(1_u64 << idx)
-        } else {
-            Self::NONE
-        }
-    }
-
-    /// Enables visibility in `slot`.
-    pub const fn with(self, slot: ViewSlotId) -> Self {
-        let idx = slot.as_u32();
-        if idx < 64 {
-            Self(self.0 | (1_u64 << idx))
-        } else {
-            self
-        }
-    }
-
-    /// Disables visibility in `slot`.
-    pub const fn without(self, slot: ViewSlotId) -> Self {
-        let idx = slot.as_u32();
-        if idx < 64 {
-            Self(self.0 & !(1_u64 << idx))
-        } else {
-            self
-        }
-    }
-
-    /// Returns `true` when `slot` is enabled in this mask (`slot.as_u32() < 64`).
-    pub const fn includes(self, slot: ViewSlotId) -> bool {
-        let idx = slot.as_u32();
-        idx < 64 && (self.0 & (1_u64 << idx)) != 0
-    }
-
-    /// Evaluates visibility for `current` (`Some(slot)` during `MultiViewFrame`, `None` on the
-    /// default single-view head).
-    pub const fn matches_current(self, current: Option<ViewSlotId>) -> bool {
-        match current {
-            Some(slot) => self.includes(slot),
-            None => self.0 != 0,
-        }
-    }
-
-    /// Evaluates visibility against the active [`CurrentViewSlot`] stored in `world`.
-    pub fn is_visible_in_world(self, world: &World) -> bool {
-        let current = world.resources.get::<CurrentViewSlot>().and_then(|s| s.0);
-        self.matches_current(current)
-    }
-}
-
 /// Geodetic 6-DoF placement of a dynamic 3D entity (aircraft, rotorcraft, ground vehicle, or
 /// static 3D model instance).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -209,12 +136,10 @@ pub struct Placement3d {
     pub altitude_reference: AltitudeReference,
     /// Full 3D body-to-ENU quaternion attitude (no 2-angle Euler lock-in).
     pub orientation: Orientation3d,
-    /// Per-slot visibility mask for heterogeneous multi-view rendering.
-    pub view_mask: ViewSlotMask,
 }
 
 impl Placement3d {
-    /// Creates a [`Placement3d`] visible in all slots with [`AltitudeReference::AboveMsl`].
+    /// Creates a [`Placement3d`] with [`AltitudeReference::AboveMsl`].
     pub const fn new_msl(
         position: LatLon,
         altitude_meters: f64,
@@ -225,7 +150,6 @@ impl Placement3d {
             altitude_meters,
             altitude_reference: AltitudeReference::AboveMsl,
             orientation,
-            view_mask: ViewSlotMask::ALL,
         }
     }
 
@@ -249,11 +173,6 @@ impl Placement3d {
             }
             _ => self.orientation.normalized(),
         }
-    }
-
-    /// Returns `true` when this entity should be drawn in `world`'s active [`CurrentViewSlot`].
-    pub fn is_visible_in_world(&self, world: &World) -> bool {
-        self.view_mask.is_visible_in_world(world)
     }
 
     /// Exact `f64` model-to-unit-sphere matrix mapping body-frame metres into `body`'s unit-sphere

@@ -1,5 +1,5 @@
-//! An eye's frustum as the tangents of its half angles, the form head-mounted displays report
-//! a per-eye projection in and the form that survives a change of units.
+//! An eye's frustum as the tangents of its half angles, the form that survives a change of
+//! units.
 
 use cgmath::{frustum, Matrix4, Rad};
 

@@ -36,6 +36,13 @@ pub enum HeadlessMapOperationError {
         #[source]
         source: ProcessGeoJsonError,
     },
+    /// A frame's external view cannot be drawn.
+    #[error("invalid external view")]
+    ExternalView {
+        /// Validation failure from the supplied placement or frustum.
+        #[source]
+        source: crate::render::view_state::ExternalViewError,
+    },
     /// Render schedule execution failed.
     #[error("headless render schedule failed")]
     Schedule {

@@ -39,9 +39,7 @@ pub fn upload_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    if settings.symbol_pools.is_empty()
-        || crate::render::eye_covering::EyeInFrame::reuses_content(world)
-    {
+    if settings.symbol_pools.is_empty() {
         return Ok(());
     }
     let visible = super::covering::upload_tiles(world);

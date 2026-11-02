@@ -6,113 +6,7 @@ use super::*;
 use crate::{
     coords::{LatLon, Zoom},
     projection::body::Body,
-    render::eye_covering::{CurrentViewSlot, ViewSlotId},
-    tcs::world::World,
 };
-
-#[cfg(all(feature = "headless", feature = "experimental"))]
-fn reaches(
-    graph: &crate::render::graph::RenderGraph,
-    from: &'static str,
-    to: &'static str,
-) -> bool {
-    let Ok(target_state) = graph.get_node_state(to) else {
-        return false;
-    };
-    let target_id = target_state.id;
-    let Ok(start_state) = graph.get_node_state(from) else {
-        return false;
-    };
-    let mut stack: Vec<crate::render::graph::NodeId> = vec![start_state.id];
-    let mut visited = std::collections::HashSet::new();
-    while let Some(current) = stack.pop() {
-        if current == target_id && current != start_state.id {
-            return true;
-        }
-        if !visited.insert(current) {
-            continue;
-        }
-        if let Ok(outputs) = graph.iter_node_outputs(current) {
-            for (_, next) in outputs {
-                stack.push(next.id);
-            }
-        }
-    }
-    false
-}
-
-#[cfg(feature = "headless")]
-#[test]
-#[cfg(feature = "experimental")]
-fn scene_3d_pass_locks_canonical_draw_graph_ordering_across_plugins() {
-    use std::rc::Rc;
-
-    use crate::{
-        background::{daylight::GLOBE_DAYLIGHT, BackgroundPlugin},
-        overlay::{OverlayPlugin, DEPTH_PROBE_PASS, OVERLAY_PASS},
-        plugin::Plugin,
-        render::{draw_graph, graph::RenderGraph, RenderPlugin},
-        schedule::Schedule,
-        starfield::{sun::depth::SUN_DEPTH_COPY, StarfieldPlugin},
-    };
-    let size = crate::window::PhysicalSize::new(64, 64).expect("size");
-    let kernel = Rc::new(
-        crate::headless::environment::create_kernel(size, None, None, None).expect("kernel"),
-    );
-    let mut world = World::default();
-    let mut schedule = Schedule::default();
-    let mut graph = RenderGraph::default();
-
-    RenderPlugin.build(&mut schedule, Rc::clone(&kernel), &mut world, &mut graph);
-    BackgroundPlugin.build(&mut schedule, Rc::clone(&kernel), &mut world, &mut graph);
-    OverlayPlugin.build(&mut schedule, Rc::clone(&kernel), &mut world, &mut graph);
-    StarfieldPlugin.build(&mut schedule, Rc::clone(&kernel), &mut world, &mut graph);
-
-    let draw = graph
-        .get_sub_graph(draw_graph::NAME)
-        .expect("draw subgraph");
-    assert!(reaches(draw, draw_graph::node::MAIN_PASS, GLOBE_DAYLIGHT));
-    assert!(reaches(
-        draw,
-        GLOBE_DAYLIGHT,
-        draw_graph::node::SCENE_3D_PASS
-    ));
-    assert!(reaches(
-        draw,
-        draw_graph::node::MAIN_PASS,
-        draw_graph::node::SCENE_3D_PASS
-    ));
-    assert!(reaches(draw, draw_graph::node::SCENE_3D_PASS, OVERLAY_PASS));
-    assert!(reaches(draw, OVERLAY_PASS, DEPTH_PROBE_PASS));
-    assert!(reaches(
-        draw,
-        DEPTH_PROBE_PASS,
-        draw_graph::node::TRANSLUCENT_PASS
-    ));
-    assert!(reaches(
-        draw,
-        draw_graph::node::SCENE_3D_PASS,
-        SUN_DEPTH_COPY
-    ));
-    assert!(reaches(
-        draw,
-        SUN_DEPTH_COPY,
-        draw_graph::node::TRANSLUCENT_PASS
-    ));
-    assert!(reaches(
-        draw,
-        draw_graph::node::TRANSLUCENT_PASS,
-        draw_graph::node::DEPTH_COPY
-    ));
-    assert!(
-        !reaches(
-            draw,
-            draw_graph::node::TRANSLUCENT_PASS,
-            draw_graph::node::SCENE_3D_PASS
-        ),
-        "draw_graph must remain a strict DAG"
-    );
-}
 
 #[test]
 fn orientation_3d_handles_steep_bank_vertical_pitch_and_inverted_attitudes() {
@@ -211,7 +105,6 @@ fn slope_aligned_ground_vehicle_and_mercator_transform_match_datum() {
         altitude_meters: 1.2,
         altitude_reference: AltitudeReference::OnGroundSlopeAligned,
         orientation: Orientation3d::from_heading_pitch_roll_degrees(0.0, 0.0, 0.0),
-        view_mask: ViewSlotMask::ALL,
     };
     assert!((vehicle.resolved_altitude_msl(430.0) - 431.2).abs() < 1e-12);
 
@@ -226,44 +119,4 @@ fn slope_aligned_ground_vehicle_and_mercator_transform_match_datum() {
 
     let merc = vehicle.model_to_mercator_world(Zoom::new(16.0), &body, 430.0, Some(normal_enu));
     assert!((merc.w.z - 431.2).abs() < 1e-9);
-}
-
-#[test]
-fn view_slot_mask_hides_ownship_in_cockpit_otw_while_showing_in_chase_slot() {
-    let otw_slot = ViewSlotId::from_raw(0);
-    let chase_slot = ViewSlotId::from_raw(1);
-    let sensor_slot = ViewSlotId::from_raw(2);
-
-    let ownship = Placement3d {
-        position: LatLon::new(47.45, 8.55),
-        altitude_meters: 1_200.0,
-        altitude_reference: AltitudeReference::AboveMsl,
-        orientation: Orientation3d::IDENTITY,
-        view_mask: ViewSlotMask::ALL.without(otw_slot),
-    };
-    let sensor_reticle_3d = Placement3d {
-        view_mask: ViewSlotMask::only(sensor_slot),
-        ..ownship
-    };
-
-    let mut world = World::default();
-    assert!(ownship.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(otw_slot)));
-    assert!(
-        !ownship.is_visible_in_world(&world),
-        "ownship hidden in Cockpit OTW"
-    );
-    assert!(!sensor_reticle_3d.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(chase_slot)));
-    assert!(
-        ownship.is_visible_in_world(&world),
-        "ownship visible in Chase camera"
-    );
-    assert!(!sensor_reticle_3d.is_visible_in_world(&world));
-
-    world.resources.insert(CurrentViewSlot(Some(sensor_slot)));
-    assert!(ownship.is_visible_in_world(&world));
-    assert!(sensor_reticle_3d.is_visible_in_world(&world));
 }

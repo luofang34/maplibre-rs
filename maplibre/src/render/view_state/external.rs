@@ -1,5 +1,4 @@
-//! External views: an eye the host places, for head tracking, a stereo pair, or a globe the
-//! host set down in its own world.
+//! External views: an eye the host places, or a globe the host set down in its own world.
 //!
 //! The host hands over the view matrix it renders with and the eye's frustum. The map derives
 //! its center, zoom and angles from the view matrix, so tile covering and pixel scale follow
@@ -448,6 +447,10 @@ fn flat_pose_of(frame: &EyeFrame, anchor: ExternalAnchor, body: Body) -> CameraP
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "external/placement_tests.rs"]
+mod placement_tests;
 
 #[cfg(test)]
 #[path = "external/regression/tests.rs"]

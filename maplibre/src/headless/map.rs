@@ -38,41 +38,34 @@ use crate::{
 mod camera;
 mod dem;
 mod error;
+pub(crate) mod external_frame;
 #[cfg(test)]
 mod injected_loader;
 mod labels;
-pub mod multi_view;
 pub use error::HeadlessMapOperationError;
-#[cfg(feature = "experimental")]
-mod experimental;
 mod processed;
 mod provided_images;
 mod raster;
 pub mod readback;
 pub mod reference;
+#[cfg(test)]
+mod shared_assets;
 mod signals;
 mod style;
 #[cfg(test)]
 mod symbol_worker;
-mod symbols;
 mod targets;
 #[cfg(test)]
 mod terrain_coverage;
 mod terrain_patch;
-#[cfg(all(test, feature = "experimental"))]
+#[cfg(test)]
 mod vertical_perspective;
-mod xr;
 
-pub use multi_view::{
-    CoveringPolicy, MultiViewError, MultiViewFrame, SlotView, ViewSlotConfig, ViewSlotEntry,
-    ViewSlotId,
-};
 pub use processed::{
     process_geojson_layers, process_geojson_layers_with_atlas, process_tile_layers,
     process_tile_layers_with_atlas, ProcessedLayers, SymbolLayer, VectorLayer,
 };
 pub use terrain_patch::TerrainPatchSnapshot;
-pub use xr::XrFrameError;
 
 pub use crate::io::tile_json::resolve_tile_json_sources;
 
@@ -350,12 +343,6 @@ impl HeadlessMap {
     /// The view the map renders from.
     pub fn view_state(&self) -> &ViewState {
         &self.map_context.view_state
-    }
-
-    /// Mutable world access for tests that stage frame state.
-    #[cfg(test)]
-    pub(crate) fn world_mut(&mut self) -> &mut crate::tcs::world::World {
-        &mut self.map_context.world
     }
 
     /// The renderer, for tests that look at its attachments.

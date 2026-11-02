@@ -131,7 +131,7 @@ fn an_off_center_perspective_survives_the_round_trip() {
 fn a_per_eye_frustum_is_used_as_it_is_and_moves_the_covering() {
     let original = posed_view_state();
     let symmetric = original.external_view();
-    // A frustum shifted far to one side, as an eye of a stereo pair would be.
+    // A frustum shifted far to one side.
     let eye = ExternalView {
         frustum: EyeFrustum {
             left: symmetric.frustum.left * 0.2,

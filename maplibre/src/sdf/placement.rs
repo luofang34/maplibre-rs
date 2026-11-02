@@ -145,8 +145,7 @@ const PERSPECTIVE_RATIO_CUTOFF: f64 = 0.6;
 
 /// Whether the label's anchor lies too far toward the horizon to be placed, as GL JS's collision
 /// index decides from the anchor's perspective ratio whatever the label's alignment. A
-/// head-tracked view keeps labels at their angular size and leaves distance to the host's
-/// [`super::visibility::SymbolVisibility`].
+/// external view keeps labels at their angular size.
 pub(super) fn beyond_perspective_cutoff(
     layer: &SymbolLayerData,
     feature: &Feature,

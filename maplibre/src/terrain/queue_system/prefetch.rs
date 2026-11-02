@@ -8,7 +8,6 @@ use crate::{
         memory_budget::{MemoryBudget, MemoryPressure},
         tile_memory::tile_bytes,
         view_state::{ViewState, ViewStatePadding},
-        xr::PrefetchView,
     },
     style::Style,
     tcs::world::World,
@@ -48,25 +47,15 @@ pub(super) fn prepare(
         return;
     }
     cadence.0 = Some(time);
-    let ahead = world
-        .resources
-        .get::<PrefetchView>()
-        .and_then(|prefetch| prefetch.view_state.as_ref());
-    let request_view = ahead.unwrap_or(view);
-    let padding = if ahead.is_some() {
-        ViewStatePadding::Tight
-    } else {
-        ViewStatePadding::Loose
-    };
     let candidates = {
         let region = crate::terrain::source::dem_source(style)
             .map(|dem| {
                 crate::render::projection::terrain_region(
                     style,
-                    request_view,
+                    view,
                     world,
                     dem.tile_size,
-                    padding,
+                    ViewStatePadding::Loose,
                 )
             })
             .transpose()

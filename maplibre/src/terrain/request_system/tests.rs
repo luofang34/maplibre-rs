@@ -120,8 +120,7 @@ fn default_immersive_height_requests_fine_dem_without_head_motion() {
         projection::ProjectionType,
         render::{
             camera::EyeFrustum,
-            view_state::{ExternalAnchor, ViewState},
-            xr::ScenePlacement,
+            view_state::{ExternalAnchor, ExternalView, ViewState},
         },
         style::Style,
         window::PhysicalSize,
@@ -140,18 +139,16 @@ fn default_immersive_height_requests_fine_dem_without_head_motion() {
             Deg(0.0),
             Rad(1.4),
         );
-        let placement = ScenePlacement {
+        let eye = Matrix4::from_translation(Vector3::new(0.0, 0.0, 4000.0))
+            * Matrix4::from_angle_x(Deg(pitch));
+        let external = ExternalView {
             anchor: ExternalAnchor {
                 position,
                 altitude_meters: 0.0,
             },
-            world_from_scene: Matrix4::identity(),
+            view: eye.invert().expect("eye"),
+            frustum: EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
         };
-        let eye = Matrix4::from_translation(Vector3::new(0.0, 0.0, 4000.0))
-            * Matrix4::from_angle_x(Deg(pitch));
-        let external = placement
-            .view_from(eye, EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8))
-            .expect("eye");
         view.set_external_view(external, &ProjectionType::Globe)
             .expect("view");
         let world = World::default();

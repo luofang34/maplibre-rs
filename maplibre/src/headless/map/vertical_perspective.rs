@@ -106,7 +106,6 @@ impl LevelMap {
                 Box::new(crate::terrain::TerrainPlugin::<
                     crate::terrain::DefaultDemTransferables,
                 >::default()),
-                Box::new(crate::overlay::OverlayPlugin),
             ],
         )
         .expect("map");
@@ -155,54 +154,6 @@ impl LevelMap {
             "the frame never settled: center at {} m, expected {expected_center:?} m",
             self.map.view_state().center_elevation()
         );
-    }
-
-    /// The frame's colour as RGBA bytes, row by row.
-    fn read_color(&self) -> Vec<[u8; 4]> {
-        let texture = self.map.head_texture().expect("head texture");
-        let row = (WIDTH * 4).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
-            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let buffer = self.map.device().create_buffer(&wgpu::BufferDescriptor {
-            label: Some("vertical perspective colour readback"),
-            size: u64::from(row * HEIGHT),
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-        let mut encoder = self
-            .map
-            .device()
-            .create_command_encoder(&Default::default());
-        encoder.copy_texture_to_buffer(
-            texture.as_image_copy(),
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(row),
-                    rows_per_image: None,
-                },
-            },
-            texture.size(),
-        );
-        self.map.queue().submit([encoder.finish()]);
-        buffer
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, |result| result.expect("readback"));
-        self.map
-            .device()
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("GPU readback completes");
-        let bytes = buffer.slice(..).get_mapped_range().expect("range").to_vec();
-        buffer.unmap();
-        (0..HEIGHT)
-            .flat_map(|y| {
-                let bytes = &bytes;
-                (0..WIDTH).map(move |x| {
-                    let at = (y * row + x * 4) as usize;
-                    [bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]
-                })
-            })
-            .collect()
     }
 
     fn read_depth(&self) -> Vec<f32> {
@@ -435,8 +386,3 @@ mod poles;
 mod sight;
 mod unclamped;
 mod zoom;
-
-use sight::{ground_marks, Mark};
-
-/// The same marks, answered by the depth probes and by the CPU line of sight.
-mod occlusion;

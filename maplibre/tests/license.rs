@@ -8,7 +8,6 @@ use std::{fs, path::Path};
 
 const MIXED_CRATE: &str = "AGPL-3.0-or-later AND (MIT OR Apache-2.0)";
 const MIXED_PACKAGE: &str = "AGPL-3.0-or-later AND MIT";
-const FORK_ONLY: &str = "AGPL-3.0-or-later";
 
 fn read(path: &str) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
@@ -57,25 +56,11 @@ fn every_crate_declares_the_licenses_of_its_code() {
             "{member} inherits the workspace license"
         );
     }
-    for crate_only_in_fork in [
-        "apple/visionos/Cargo.toml",
-        "apple/visionos/MapLibreVision/IndicateOverlay/bridge/Cargo.toml",
-    ] {
-        assert_eq!(
-            cargo_license(&read(crate_only_in_fork)).as_deref(),
-            Some(FORK_ONLY),
-            "{crate_only_in_fork}"
-        );
-    }
 }
 
 #[test]
 fn every_package_declares_the_licenses_of_its_code() {
-    for (package, license) in [
-        ("web/lib", MIXED_PACKAGE),
-        ("web/demo", MIXED_PACKAGE),
-        ("web/xr", FORK_ONLY),
-    ] {
+    for (package, license) in [("web/lib", MIXED_PACKAGE), ("web/demo", MIXED_PACKAGE)] {
         for file in ["package.json", "package-lock.json"] {
             let path = format!("{package}/{file}");
             let json: serde_json::Value = serde_json::from_str(&read(&path)).expect(&path);

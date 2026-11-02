@@ -65,15 +65,12 @@ pub mod environment;
 pub mod map;
 pub mod window;
 
-pub use map::{
-    CoveringPolicy, MultiViewError, MultiViewFrame, SlotView, TerrainPatchSnapshot, ViewSlotConfig,
-    ViewSlotEntry, ViewSlotId,
-};
+pub use map::TerrainPatchSnapshot;
 pub use shared_assets::SharedMapAssets;
 
 pub use crate::render::{
-    placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask},
-    settings::{ProceduralReliefStyle, TerrainDrapeMode},
+    placement_3d::{AltitudeReference, Orientation3d, Placement3d},
+    settings::TerrainDrapeMode,
 };
 
 /// Creates a renderer with default GPU settings and nonzero physical-pixel dimensions.

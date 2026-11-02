@@ -22,7 +22,7 @@ pub enum ViewSource {
     /// The map's own camera, steered by the gesture handlers and the pose API.
     #[default]
     MapView,
-    /// An eye supplied by the host, for head tracking or one eye of a stereo pair.
+    /// An eye supplied by the host.
     External(ExternalView),
 }
 
@@ -108,7 +108,7 @@ pub fn frame_input_system(
         ..
     }: &mut MapContext,
 ) -> SystemResult {
-    super::eye_covering::snapshot_lod_history(world);
+    super::frame_covering::snapshot_lod_history(world);
     let Some(input) = world.resources.get::<FrameInput>() else {
         return Ok(());
     };

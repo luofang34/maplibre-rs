@@ -1,9 +1,8 @@
 //! Resolves frame depth for symbol occlusion and host compositors.
 //!
-//! A head-mounted display's compositor reprojects the frame for the moment it is shown and
-//! blends it with the world, and needs the depth of every pixel to do so. The map renders
-//! depth with a stencil, in whatever format the device favours; this pass copies it into the
-//! `Depth32Float` texture the host provides, after everything has been drawn.
+//! The map renders depth with a stencil, in whatever format the device favours; this pass
+//! copies it into the `Depth32Float` texture the host provides, after everything has been
+//! drawn.
 
 use wgpu::StoreOp;
 

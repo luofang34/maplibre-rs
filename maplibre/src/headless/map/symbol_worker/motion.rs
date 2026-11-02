@@ -112,38 +112,27 @@ async fn a_label_holds_to_its_ground_while_the_map_pans_turns_and_tilts() {
     }
 }
 
+use crate::headless::map::external_frame::{tests::eye_view, ExternalFrame};
+
 /// One eye 600 m south of the label and 350 m up, looking north and 30 degrees down, turned
 /// `yaw` degrees and moved `drift` metres east.
-fn head(yaw: f64, drift: f64, clock: u32) -> crate::render::xr::XrFrame {
+fn head(yaw: f64, drift: f64, clock: u32) -> ExternalFrame {
     use cgmath::{Matrix4, Rad, Vector3};
 
-    use crate::render::{
-        camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-    };
-    XrFrame {
+    use crate::render::camera::EyeFrustum;
+    ExternalFrame {
         opaque_environment: true,
         timestamp: std::time::Duration::from_millis(u64::from(clock) * 11),
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: crate::coords::LatLon::new(0.0099, 0.0095),
-                altitude_meters: 0.0,
-            },
-            world_from_scene: Matrix4::from_scale(1.0),
-        },
-        eyes: vec![XrEye {
-            world_from_eye: Matrix4::from_translation(Vector3::new(drift, -600.0, 350.0))
+        view: eye_view(
+            crate::coords::LatLon::new(0.0099, 0.0095),
+            0.0,
+            Matrix4::from_translation(Vector3::new(drift, -600.0, 350.0))
                 * Matrix4::from_angle_z(Rad(yaw.to_radians()))
                 * Matrix4::from_angle_x(Rad(60_f64.to_radians())),
-            frustum: EyeFrustum::symmetric(Rad(1.2), 1.0, 0.1, 100_000.0),
-            target: EyeTarget {
-                color: None,
-                depth: None,
-            },
-        }],
+            EyeFrustum::symmetric(Rad(1.2), 1.0, 0.1, 100_000.0),
+        ),
+        depth: None,
         request_overscan: 1.0,
-        prefetch: None,
     }
 }
 
@@ -154,7 +143,7 @@ async fn a_label_holds_to_its_ground_while_a_tracked_head_turns() {
     // and fade in first.
     for clock in 0..120 {
         map.map
-            .run_xr_frame(head(0.0, 0.0, clock))
+            .run_external_frame(head(0.0, 0.0, clock))
             .expect("still head");
         for _ in 0..8 {
             tokio::task::yield_now().await;
@@ -163,7 +152,7 @@ async fn a_label_holds_to_its_ground_while_a_tracked_head_turns() {
     let offsets = offsets(&mut map, 40, async |map, frame| {
         let step = f64::from(frame);
         map.map
-            .run_xr_frame(head(step * 0.2, step * 0.5, 120 + frame))
+            .run_external_frame(head(step * 0.2, step * 0.5, 120 + frame))
             .expect("turning head");
         for _ in 0..8 {
             tokio::task::yield_now().await;

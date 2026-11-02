@@ -1,76 +1,20 @@
-//! Terrain texture coordinates and uniforms shared across a stereo frame.
+//! Terrain texture coordinates and uniforms of a frame.
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::{
     coords::{WorldTileCoords, EXTENT},
     projection::renderer_data::tile_mercator_coordinates,
-    render::{
-        eventually::{Eventually, Eventually::Initialized},
-        view_state::ViewState,
-    },
+    render::view_state::ViewState,
     style::{source::TileAddressingScheme, Style},
-    tcs::{system::SystemResult, world::World},
+    tcs::world::World,
     terrain::{
         drape_targets::TargetSpec,
         request_system::dem_tile_coords,
         resources::{TerrainFog, TerrainResources, TerrainTileUniforms},
         source::DemSource,
-        DrapePhase,
     },
 };
 mod globe;
-#[derive(Clone, Default)]
-pub(crate) struct TerrainEyeFrame(pub Vec<(WorldTileCoords, TerrainTileUniforms)>);
-
-pub(super) fn replay(
-    world: &mut World,
-    style: &Style,
-    view: &ViewState,
-    queue: &crate::render::upload_queue::UploadQueue,
-) -> SystemResult {
-    let fog = terrain_fog(style, view);
-    let lighting = world
-        .resources
-        .get::<crate::render::SceneLighting>()
-        .copied()
-        .unwrap_or_default();
-    let drape_mode = world
-        .resources
-        .get::<crate::render::settings::TerrainDrapeMode>()
-        .copied()
-        .or_else(
-            || match world.resources.get::<Eventually<TerrainResources>>() {
-                Some(Initialized(terrain)) => Some(terrain.drape_mode()),
-                _ => None,
-            },
-        )
-        .unwrap_or_default();
-    let projection = view.gpu_view_projection();
-    if let Some(frame) = world.resources.get_mut::<TerrainEyeFrame>() {
-        for (coords, uniform) in &mut frame.0 {
-            uniform.transform = projection
-                .to_model_view_projection(coords.transform_for_zoom(view.zoom()))
-                .downcast()
-                .into();
-            uniform.fog_color = fog.fog_color;
-            uniform.horizon_color = fog.horizon_color;
-            uniform.fog_range = [fog.near, fog.far, fog.ground_blend, fog.horizon_blend];
-            uniform.fog_opacity[0] = fog.opacity;
-            uniform.fog_opacity[1] = f32::from(fog.globe);
-            surface_uniforms(uniform, *coords, (style, lighting, drape_mode), view);
-        }
-    }
-    if let (Some(frame), Some(Initialized(terrain))) = (
-        world.resources.get::<TerrainEyeFrame>(),
-        world.resources.get::<Eventually<TerrainResources>>(),
-    ) {
-        let uniforms: Vec<_> = frame.0.iter().map(|(_, uniform)| *uniform).collect();
-        terrain.write_uniforms(queue, &uniforms);
-    }
-    world.resources.insert(DrapePhase::default());
-    super::hide_draped_layers(world, style);
-    Ok(())
-}
 /// The nearest uploaded DEM tile at or above the DEM zoom of a view tile.
 pub(super) fn loaded_dem_tile(
     coords: WorldTileCoords,
@@ -186,8 +130,6 @@ pub(super) fn tile_uniforms(
         daylight: [0.0; 4],
         twilight: [0.0; 4],
         moonlight: [0.0; 4],
-        procedural_relief: [0.0; 4],
-        procedural_grid: [0.0; 4],
     })
 }
 
@@ -286,12 +228,7 @@ pub(super) fn prepare_tiles(
         ) else {
             continue;
         };
-        surface_uniforms(
-            &mut block,
-            spec.coords,
-            (style, lighting, terrain.drape_mode()),
-            view_state,
-        );
+        surface_uniforms(&mut block, spec.coords, (style, lighting), view_state);
         uniforms.push(block);
         sources.push((dem_coords, spec.coords, drape_source));
     }
@@ -299,18 +236,16 @@ pub(super) fn prepare_tiles(
 }
 
 /// Adds a draw of each surface tile for every copy of the world that shows it, shifted over by
-/// the copy's whole worlds. Returns the draws' sources and the coordinates, beyond the grid for a
-/// copy, each is placed at.
+/// the copy's whole worlds. Returns the draws' sources.
 pub(super) fn with_world_copies(
     uniforms: &mut Vec<TerrainTileUniforms>,
     sources: Vec<TileSources>,
     copies: Option<&std::collections::HashMap<WorldTileCoords, Vec<i32>>>,
     view: &ViewState,
-) -> (Vec<TileSources>, Vec<WorldTileCoords>) {
-    let mut placed: Vec<WorldTileCoords> = sources.iter().map(|(_, coords, _)| *coords).collect();
+) -> Vec<TileSources> {
     let mut all = sources;
     let Some(copies) = copies else {
-        return (all, placed);
+        return all;
     };
     let projection = view.gpu_view_projection();
     let zoom = view.zoom();
@@ -333,20 +268,15 @@ pub(super) fn with_world_copies(
             block.tile_mercator_coords[0] += *wrap as f32;
             uniforms.push(block);
             all.push(all[index]);
-            placed.push(shifted);
         }
     }
-    (all, placed)
+    all
 }
 
 fn surface_uniforms(
     block: &mut TerrainTileUniforms,
     coords: WorldTileCoords,
-    (style, lighting, drape_mode): (
-        &Style,
-        crate::render::SceneLighting,
-        crate::render::settings::TerrainDrapeMode,
-    ),
+    (style, lighting): (&Style, crate::render::SceneLighting),
     view: &ViewState,
 ) {
     globe::set_uniforms(block, coords, view);
@@ -363,29 +293,4 @@ fn surface_uniforms(
     block.relief_strength = if view.has_external_view() { 0.45 } else { 0.0 };
     block.fog_opacity[3] = f32::from(view.has_external_view());
     block.fog_position = view.eye_fog_position(coords).unwrap_or([0.0; 4]);
-    match drape_mode {
-        crate::render::settings::TerrainDrapeMode::ProceduralRelief(relief) => {
-            let tiles_across = 2_f64.powi(i32::from(u8::from(coords.z)));
-            let merc_u =
-                std::f64::consts::PI * (1.0 - 2.0 * ((f64::from(coords.y) + 0.5) / tiles_across));
-            let tile_span_m =
-                (view.body().circumference_meters() / tiles_across / merc_u.cosh()).max(1.0) as f32;
-            block.procedural_relief = [
-                1.0,
-                f32::from(relief.hypsometric),
-                relief.slope_shading,
-                relief.reference_altitude_meters.unwrap_or(0.0),
-            ];
-            block.procedural_grid = [
-                relief.grid_spacing_meters,
-                relief.grid_opacity,
-                f32::from(relief.reference_altitude_meters.is_some()),
-                tile_span_m,
-            ];
-        }
-        crate::render::settings::TerrainDrapeMode::Draped { .. } => {
-            block.procedural_relief = [0.0; 4];
-            block.procedural_grid = [0.0; 4];
-        }
-    }
 }

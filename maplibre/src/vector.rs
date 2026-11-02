@@ -47,7 +47,7 @@ pub(crate) mod request_system;
 pub use request_system::depends_on_overscaling;
 pub(crate) mod resource;
 mod resource_system;
-pub(crate) mod structures;
+pub(crate) mod terrain_lift;
 pub(crate) mod transferables;
 pub(crate) mod upload_system;
 
@@ -63,14 +63,9 @@ impl Deref for VectorPipeline {
     }
 }
 
-/// The pipelines of stroked lines, by where a line lies.
+/// The pipeline of stroked lines, on the map plane or draped into the terrain textures.
 struct LinePipeline {
-    /// On the map plane, or draped into the terrain textures.
     flat: wgpu::RenderPipeline,
-    /// At heights of its own, as a bridge deck or tunnel is, tested against the terrain depth.
-    structure: wgpu::RenderPipeline,
-    /// On the terrain surface at its width in screen pixels, with a terrain tile bound third.
-    terrain: wgpu::RenderPipeline,
 }
 
 /// The passes of extruded polygons: depth, colour once per pixel, and the stencil reset.

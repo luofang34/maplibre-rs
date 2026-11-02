@@ -1,14 +1,11 @@
 #![allow(clippy::expect_used, clippy::panic)]
-use cgmath::{Deg, Matrix4, Rad, SquareMatrix, Vector3};
+use cgmath::{Deg, Matrix4, Rad, Vector3};
 
 use super::*;
 use crate::{
     coords::LatLon,
-    render::{
-        camera::EyeFrustum,
-        view_state::ExternalAnchor,
-        xr::{EyeTarget, ScenePlacement, XrEye, XrFrame},
-    },
+    headless::map::external_frame::{tests::eye_view, ExternalFrame},
+    render::camera::EyeFrustum,
 };
 
 #[tokio::test]
@@ -27,26 +24,20 @@ async fn map_aligned_symbols_crossing_the_eye_plane_cannot_stretch_into_spikes()
     }
     let layers = layers(&style);
     let mut map = fixture_map(style, layers, 1).await;
-    let frame = |distance: f64, height: f64, pitch: f64| XrFrame {
+    let frame = |distance: f64, height: f64, pitch: f64| ExternalFrame {
         opaque_environment: true,
         timestamp: std::time::Duration::ZERO,
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: LatLon::new(-0.04394530819, 0.0439453125),
-                altitude_meters: 1200.0,
-            },
-            world_from_scene: Matrix4::identity(),
-        },
-        eyes: vec![XrEye {
-            world_from_eye: Matrix4::from_translation(Vector3::new(0.0, -distance, height))
+        view: eye_view(
+            LatLon::new(-0.04394530819, 0.0439453125),
+            1200.0,
+            Matrix4::from_translation(Vector3::new(0.0, -distance, height))
                 * Matrix4::from_angle_x(Deg(pitch)),
-            frustum: EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
-            target: EyeTarget::default(),
-        }],
+            EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
+        ),
+        depth: None,
         request_overscan: 1.0,
-        prefetch: None,
     };
-    map.run_xr_frame(frame(0.0, 500.0, 0.0))
+    map.run_external_frame(frame(0.0, 500.0, 0.0))
         .expect("visible frame");
     let red = |pixels: &[u8]| {
         pixels
@@ -60,7 +51,7 @@ async fn map_aligned_symbols_crossing_the_eye_plane_cannot_stretch_into_spikes()
         red(&read_blocking(&map)) > 0,
         "exercise a visible label before moving"
     );
-    map.run_xr_frame(frame(0.01, 0.06, 90.0))
+    map.run_external_frame(frame(0.01, 0.06, 90.0))
         .expect("eye-plane crossing");
     let pixels = read_blocking(&map);
     assert_eq!(
@@ -203,37 +194,31 @@ async fn external_eye_roll_preserves_world_label_orientation_and_readability() {
     let style = style(0.0, "ground");
     let layers = layers(&style);
     let mut map = fixture_map(style, layers, 1).await;
-    let frame = |roll: f64| XrFrame {
+    let frame = |roll: f64| ExternalFrame {
         opaque_environment: true,
         timestamp: std::time::Duration::ZERO,
-        placement: ScenePlacement {
-            anchor: ExternalAnchor {
-                position: LatLon::new(-0.04394530819, 0.0439453125),
-                altitude_meters: 1200.0,
-            },
-            world_from_scene: Matrix4::identity(),
-        },
-        eyes: vec![XrEye {
-            world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 500.0))
+        view: eye_view(
+            LatLon::new(-0.04394530819, 0.0439453125),
+            1200.0,
+            Matrix4::from_translation(Vector3::new(0.0, 0.0, 500.0))
                 * Matrix4::from_angle_z(Deg(roll)),
-            frustum: EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
-            target: EyeTarget::default(),
-        }],
+            EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
+        ),
+        depth: None,
         request_overscan: 1.0,
-        prefetch: None,
     };
-    map.run_xr_frame(frame(0.0)).expect("level eye");
+    map.run_external_frame(frame(0.0)).expect("level eye");
     let initial = read_blocking(&map);
     let (count, bounds) = colored_bounds(&initial, 0);
     assert!(count > 70 && bounds[2] - bounds[0] > bounds[3] - bounds[1]);
-    map.run_xr_frame(frame(90.0)).expect("rolled eye");
+    map.run_external_frame(frame(90.0)).expect("rolled eye");
     let (rolled_count, rolled) = colored_bounds(&read_blocking(&map), 0);
     assert!(
         rolled_count > 70 && rolled[3] - rolled[1] > rolled[2] - rolled[0],
         "a world-fixed word rotates in the eye image, rather than following head roll: {rolled:?}"
     );
     for roll in [0.01, -0.01, 0.02, -0.02, 0.0] {
-        map.run_xr_frame(frame(roll)).expect("head motion");
+        map.run_external_frame(frame(roll)).expect("head motion");
         assert!(
             colored_bounds(&read_blocking(&map), 0).0 > count / 2,
             "visible label blinked"
@@ -256,24 +241,18 @@ async fn head_pitch_does_not_resize_cartographic_labels() {
     let mut map = fixture_map(style, layers, 1).await;
     let mut widths = Vec::new();
     for pitch in [0.0, 15.0, 30.0, 15.0, 0.0] {
-        map.run_xr_frame(XrFrame {
+        map.run_external_frame(ExternalFrame {
             opaque_environment: true,
             timestamp: std::time::Duration::ZERO,
-            placement: ScenePlacement {
-                anchor: ExternalAnchor {
-                    position: LatLon::new(-0.04394530819, 0.0439453125),
-                    altitude_meters: 1200.0,
-                },
-                world_from_scene: Matrix4::identity(),
-            },
-            eyes: vec![XrEye {
-                world_from_eye: Matrix4::from_translation(Vector3::new(0.0, 0.0, 500.0))
+            view: eye_view(
+                LatLon::new(-0.04394530819, 0.0439453125),
+                1200.0,
+                Matrix4::from_translation(Vector3::new(0.0, 0.0, 500.0))
                     * Matrix4::from_angle_x(Deg(pitch)),
-                frustum: EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
-                target: EyeTarget::default(),
-            }],
+                EyeFrustum::symmetric(Rad(1.4), 1.0, 0.05, 1e8),
+            ),
+            depth: None,
             request_overscan: 1.0,
-            prefetch: None,
         })
         .expect("head pitch frame");
         let (count, bounds) = colored_bounds(&read_blocking(&map), 0);

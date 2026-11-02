@@ -238,7 +238,7 @@ impl BackgroundGpuBuffers {
 /// near an eye standing on the globe follows the sphere as closely as the tiles drawn there;
 /// the world tile while no covering is selected.
 pub fn globe_tiles(world: &crate::tcs::world::World) -> Vec<WorldTileCoords> {
-    let covering: Vec<_> = crate::render::eye_covering::drawn_tiles(world)
+    let covering: Vec<_> = crate::render::frame_covering::drawn_tiles(world)
         .unwrap_or_default()
         .iter()
         .copied()

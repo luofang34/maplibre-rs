@@ -263,9 +263,7 @@ fn vector_layer_specs(
         .into_iter()
         .flatten()
         .filter(|entry| {
-            entry.style_layer.is_visible_at(zoom)
-                && is_drapeable(&entry.style_layer.type_)
-                && crate::vector::structures::kind(&entry.style_layer).is_none()
+            entry.style_layer.is_visible_at(zoom) && is_drapeable(&entry.style_layer.type_)
         })
         .map(|entry| VectorLayerSpec {
             id: entry.style_layer.id.clone(),

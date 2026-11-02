@@ -161,13 +161,7 @@ upstream commit `96b50a09d4925f46bd68e184e754d22ac3e356a2`.
     data, imagery, sprites and fonts within them remain under their owners' terms;
   - expression conformance cases under `maplibre/tests/expressions` taken from
     maplibre-style-spec: BSD-3-Clause, see
-    [LICENSE-maplibre-style-spec.txt](maplibre/tests/expressions/LICENSE-maplibre-style-spec.txt);
-  - the Indicate snapshot under `apple/visionos/MapLibreVision/IndicateOverlay/vendor/indicate`,
-    from the repository its `SOURCE.json` records, is not covered by this repository's licenses;
-    no license has been granted for it;
-  - the replay data listed in
-    [ATTRIBUTION.txt](apple/visionos/MapLibreVision/MapLibreVision/Resources/ATTRIBUTION.txt),
-    under the terms stated there.
+    [LICENSE-maplibre-style-spec.txt](maplibre/tests/expressions/LICENSE-maplibre-style-spec.txt).
 
 ## Acknowledgements
 

@@ -5,8 +5,8 @@ use super::{
     fill_extrusion::ExtrusionPass, texture::DemShading, AtmosphereShader, BackgroundPatternShader,
     BackgroundShader, CircleShader, FillExtrusionShader, FillPatternShader, FillShader,
     GlobeBackgroundPatternShader, GlobeBackgroundShader, HeatmapCompositeShader,
-    HeatmapDensityShader, LineShader, RasterShader, Shader, SkyShader, SymbolShader,
-    TerrainLineShader, TerrainShader, TileMaskShader,
+    HeatmapDensityShader, LineShader, RasterShader, Shader, SkyShader, SymbolShader, TerrainShader,
+    TileMaskShader,
 };
 
 /// A stage's WGSL and its entry point.
@@ -31,11 +31,6 @@ fn stages() -> Vec<Stage> {
         ),
         ("sky", Box::new(SkyShader { format })),
         ("atmosphere", Box::new(AtmosphereShader { format })),
-        #[cfg(feature = "experimental")]
-        (
-            "globe daylight",
-            Box::new(crate::background::daylight::GlobeDaylightShader { format }),
-        ),
         ("heatmap density", Box::new(HeatmapDensityShader)),
         (
             "heatmap composite",
@@ -76,7 +71,6 @@ fn stages() -> Vec<Stage> {
             }),
         ),
         ("line", Box::new(LineShader { format })),
-        ("terrain line", Box::new(TerrainLineShader { format })),
         ("circle", Box::new(CircleShader { format })),
     ];
     let extrusions = [
@@ -107,25 +101,6 @@ fn stages() -> Vec<Stage> {
         ),
         ("mipmap", include_str!("mipmap.vertex.wgsl")),
         ("mipmap", include_str!("mipmap.fragment.wgsl")),
-        ("overlay", include_str!("overlay.wgsl")),
-        ("depth probe", include_str!("depth_probe.wgsl")),
-        ("depth probe", include_str!("depth_probe_multisampled.wgsl")),
-    ] {
-        stages.push((name, source.to_owned(), ""));
-    }
-    #[cfg(not(feature = "experimental"))]
-    for (name, source) in [
-        (
-            "globe daylight vertex",
-            include_str!("globe_daylight.vertex.wgsl"),
-        ),
-        (
-            "globe daylight fragment",
-            concat!(
-                include_str!("daylight.wgsl.part"),
-                include_str!("globe_daylight.fragment.wgsl")
-            ),
-        ),
     ] {
         stages.push((name, source.to_owned(), ""));
     }

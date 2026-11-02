@@ -62,28 +62,19 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
             return Ok(());
         }
         let pixel_ratio = display_pixel_ratio(world, renderer, view_state);
-        let multi = world
-            .resources
-            .get::<crate::render::eye_covering::MultiViewExtractCovering>()
-            .filter(|m| m.active)
-            .cloned();
-        let view_tiles_and_level = if let Some(multi) = &multi {
-            Some((multi.vector_tiles.clone(), multi.max_view_level))
-        } else {
-            view_region_for_projection(
-                style,
-                view_state,
-                world,
-                view_state.zoom().zoom_level(DEFAULT_TILE_SIZE),
-                ViewStatePadding::Loose,
-            )?
-            .map(|region| {
-                (
-                    region.iter().collect::<Vec<_>>(),
-                    u8::from(view_state.zoom().zoom_level(DEFAULT_TILE_SIZE)),
-                )
-            })
-        };
+        let view_tiles_and_level = view_region_for_projection(
+            style,
+            view_state,
+            world,
+            view_state.zoom().zoom_level(DEFAULT_TILE_SIZE),
+            ViewStatePadding::Loose,
+        )?
+        .map(|region| {
+            (
+                region.iter().collect::<Vec<_>>(),
+                u8::from(view_state.zoom().zoom_level(DEFAULT_TILE_SIZE)),
+            )
+        });
 
         // Tile arrivals, eviction and a settling eye can change the covering without motion.
         if let Some((view_tiles, level)) = view_tiles_and_level {
@@ -159,9 +150,6 @@ impl<E: Environment, T: VectorTransferables> System for RequestSystem<E, T> {
                     only_sources,
                     (vectors_disabled, symbols_disabled),
                 )?;
-            }
-            if let Some(multi) = &multi {
-                requested.extend(multi.skipped_wanted_vector.iter().copied());
             }
             tile_retry::want(world, RequestKind::Vector, &requested);
             self.release_unwanted(world, &requested);

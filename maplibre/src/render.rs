@@ -61,10 +61,8 @@ pub mod builder;
 pub mod camera;
 pub mod error;
 pub mod eventually;
-pub mod eye_covering;
+pub mod frame_covering;
 pub mod memory_budget;
-#[cfg(all(test, feature = "headless"))]
-pub(crate) use systems::retention_system::drawn_tiles;
 #[cfg(feature = "headless")]
 pub(crate) use systems::retention_system::RetainLoadedTiles;
 pub mod after_submit;
@@ -86,7 +84,6 @@ pub mod tile_view_pattern;
 pub mod tracked_pass;
 pub mod upload_queue;
 pub mod view_state;
-pub mod xr;
 
 pub use after_submit::*;
 pub use pass_hooks::*;
@@ -372,8 +369,8 @@ impl Renderer {
         if let Some(constrained_limits) = settings.constrained_limits.as_ref() {
             limits = limits.or_worse_values_from(constrained_limits);
         }
-        // Default limits a device falls short of, such as the visionOS simulator's GPU with
-        // 15 inter-stage variables, are lowered to what it offers, so the map still starts and
+        // Default limits a device falls short of, such as a simulator's GPU with few inter-stage
+        // variables, are lowered to what it offers, so the map still starts and
         // only a pipeline needing more fails, naming the limit. Limits a host asked for are
         // kept, and a device that cannot meet them is an error.
         if settings.limits == wgpu::Limits::default() {
@@ -418,6 +415,6 @@ impl Renderer {
 mod render_plugin;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;
-pub use placement_3d::{AltitudeReference, Orientation3d, Placement3d, ViewSlotMask};
+pub use placement_3d::{AltitudeReference, Orientation3d, Placement3d};
 pub use render_plugin::{draw_graph, main_graph, MaskPipeline, RenderPlugin};
 pub(crate) mod tile_memory;

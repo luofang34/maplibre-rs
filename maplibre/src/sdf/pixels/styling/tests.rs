@@ -57,24 +57,12 @@ async fn zero_width_halo_does_not_tint_antialiased_text_edges() {
 }
 
 fn application_label(id: &str, zoom: f64) -> Style {
-    let app: Style = serde_json::from_str(include_str!(
-        "../../../../../apple/visionos/MapLibreVision/MapLibreVision/style.json"
-    ))
-    .expect("application style");
-    let layer = app
-        .layers
-        .iter()
-        .find(|layer| layer.id == id)
-        .expect("place");
-    let Some(LayerPaint::Symbol(paint)) = &layer.paint else {
-        panic!("place symbol");
+    // Text sizes interpolate over each label class's zoom range, as a basemap's place labels do.
+    let (halo_width, size) = match id {
+        "place_other" => (1.0, 12.0 + (zoom - 14.0) * 2.0 / 5.0),
+        "place_city_large" => (1.2, 19.0 + (zoom - 5.0) * 6.0 / 5.0),
+        other => panic!("no label class {other}"),
     };
-    let size = paint
-        .text_size
-        .as_ref()
-        .expect("size")
-        .evaluate_at_zoom(zoom)
-        .expect("size value");
     let mut value = serde_json::to_value(style(0., "ground")).expect("fixture");
     value["pitch"] = 0.into();
     value["layers"][0]["paint"]["background-color"] = "#889988".into();
@@ -84,7 +72,12 @@ fn application_label(id: &str, zoom: f64) -> Style {
         .as_object_mut()
         .expect("layout")
         .remove("icon-image");
-    label["paint"] = serde_json::to_value(paint).expect("paint");
+    label["paint"] = serde_json::json!({
+        "text-color": "#243740",
+        "text-halo-blur": 0.2,
+        "text-halo-color": "#eef0e7",
+        "text-halo-width": halo_width,
+    });
     // The fixed tile and bundled glyph atlas isolate paint from network and camera coverage.
     label["layout"]["text-font"] = serde_json::json!(["Open Sans Regular"]);
     serde_json::from_value(value).expect("application label fixture")

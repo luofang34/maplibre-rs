@@ -131,7 +131,6 @@ pub struct StyleLayer {
     /// Inclusive lower display zoom; fractional values are preserved. `None` sets no lower bound.
     pub minzoom: Option<f64>,
     /// Application JSON properties retained across worker serialization.
-    /// Reserved `maplibre-rs:terrain-structure` keys opt into terrain-relative road profiles.
     pub metadata: Option<HashMap<String, serde_json::Value>>,
     /// Typed rendering properties; absence lets the relevant rendering path choose defaults.
     pub paint: Option<LayerPaint>,

@@ -4,7 +4,7 @@ use super::{
 };
 use crate::render::resource::{FragmentState, VertexBufferLayout, VertexState};
 
-/// Stroked-path shader with screen-pixel width and optional terrain-relative elevation.
+/// Stroked-path shader with screen-pixel width.
 pub struct LineShader {
     /// Format of the color attachment used by the render pipeline.
     pub format: wgpu::TextureFormat,
@@ -14,31 +14,6 @@ impl Shader for LineShader {
     fn describe_vertex(&self) -> VertexState {
         line_vertex(concat!(
             include_str!("projection.vertex.wgsl"),
-            include_str!("line_ground.wgsl"),
-            include_str!("line_flat.wgsl"),
-            include_str!("line.vertex.wgsl")
-        ))
-    }
-
-    fn describe_fragment(&self) -> FragmentState {
-        line_fragment(self.format)
-    }
-}
-
-/// Stroked-path shader for a line on the terrain surface: the terrain tile bound at the third
-/// bind group gives each vertex its height, and the line keeps its width in screen pixels.
-pub struct TerrainLineShader {
-    /// Format of the color attachment used by the render pipeline.
-    pub format: wgpu::TextureFormat,
-}
-
-impl Shader for TerrainLineShader {
-    fn describe_vertex(&self) -> VertexState {
-        line_vertex(concat!(
-            include_str!("projection.vertex.wgsl"),
-            include_str!("line_ground.wgsl"),
-            include_str!("terrain_surface.wgsl.part"),
-            include_str!("line_terrain.wgsl"),
             include_str!("line.vertex.wgsl")
         ))
     }

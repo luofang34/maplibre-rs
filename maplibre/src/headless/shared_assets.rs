@@ -1,7 +1,7 @@
 //! Cross-domain static asset and GPU pipeline sharing across [`HeadlessMap`](super::map::HeadlessMap) instances.
 //!
 //! Host applications that maintain isolated scene worlds on the same [`HostGpu`](crate::render::host_gpu::HostGpu)
-//! (such as `TruthScene` and `BeliefAvionics`) construct one [`SharedMapAssets`] handle and pass
+//! construct one [`SharedMapAssets`] handle and pass
 //! clones of it when building each map's headless renderer. All instances then share:
 //! - In-flight HTTP/PMTiles coalescing via an optional [`SharedLoader`],
 //! - Decoded immutable [`DemTile`](crate::terrain::DemTile) grids, static [`image::RgbaImage`]
@@ -9,7 +9,7 @@
 //! - Compiled [`wgpu::ShaderModule`], canonical [`wgpu::BindGroupLayout`], and
 //!   [`wgpu::RenderPipeline`] objects via [`SharedPipelines`].
 //!
-//! Each map's `Style`, `World`, `GeoJsonSource`s, and `OverlayMesh`es remain strictly isolated.
+//! Each map's `Style`, `World`, and `GeoJsonSource`s remain strictly isolated.
 
 use crate::{
     io::resource_loader::SharedLoader, render::resource::SharedPipelines, sdf::assets::AssetCache,

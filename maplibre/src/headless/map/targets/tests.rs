@@ -185,7 +185,7 @@ async fn lazy_map_read_and_zero_copy_color_and_depth_views() {
         .fold(0.0_f32, f32::max);
     assert!(
         max_depth > 0.0,
-        "DEPTH_COPY must populate reversed-Z Depth32Float > 0.0 without XrFrame"
+        "DEPTH_COPY must populate reversed-Z Depth32Float > 0.0"
     );
     assert!(
         !map.has_readback_buffer(),

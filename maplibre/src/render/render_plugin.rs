@@ -27,9 +27,8 @@ pub mod draw_graph {
     pub mod node {
         /// Draws tile masks and map-layer items into the frame attachments.
         pub const MAIN_PASS: &str = "main_pass";
-        /// Canonical 3D scene pass slot for dynamic 3D entities (e.g. glTF aircraft and ground
-        /// vehicles), ordered after `MAIN_PASS` (and `GLOBE_DAYLIGHT`) and before `OVERLAY_PASS`,
-        /// `DEPTH_PROBE_PASS`, `SUN_DEPTH_COPY`, `TRANSLUCENT_PASS`, and `DEPTH_COPY`.
+        /// An empty pass a host orders its own 3D scene passes around: after `MAIN_PASS` and
+        /// before `TRANSLUCENT_PASS` and `DEPTH_COPY`.
         pub const SCENE_3D_PASS: &str = "scene_3d_pass";
         /// Draws translucent items using the attachments populated by the main pass.
         pub const TRANSLUCENT_PASS: &str = "translucent_pass";

@@ -339,7 +339,7 @@ fn wide_eye_view() -> crate::render::view_state::ViewState {
         pitch: Deg(60.0),
         roll: Deg(0.0),
     });
-    // A wide level gaze, four kilometres up: what a headset sees from the immersive placement.
+    // A wide level gaze, four kilometres up: what an external eye sees from near the ground.
     let base = own.external_view();
     let level = ExternalView {
         view: Matrix4::from_angle_x(Deg(-30.0)) * base.view,
