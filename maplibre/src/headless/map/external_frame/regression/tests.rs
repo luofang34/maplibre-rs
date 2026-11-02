@@ -93,14 +93,19 @@ async fn a_still_view_ingests_and_refines_terrain_once_per_frame() {
     )
     .expect("map");
     // Deterministic ingestion at the same stage as worker results, without network timing.
-    map.schedule.remove_stage(RenderStageLabel::Request);
-    map.schedule.add_stage_before(
-        RenderStageLabel::Prepare,
-        RenderStageLabel::Request,
-        SystemStage::default().with_system(ingest),
-    );
     map.schedule
-        .add_system_to_stage(RenderStageLabel::PhaseSort, observe);
+        .remove_stage(RenderStageLabel::Request)
+        .expect("schedule");
+    map.schedule
+        .add_stage_before(
+            RenderStageLabel::Prepare,
+            RenderStageLabel::Request,
+            SystemStage::default().with_system(ingest),
+        )
+        .expect("schedule");
+    map.schedule
+        .add_system_to_stage(RenderStageLabel::PhaseSort, observe)
+        .expect("schedule");
     map.run_external_frame(frame(16)).expect("first frame");
     map.run_external_frame(frame(32)).expect("second frame");
     let observations = map
@@ -285,7 +290,8 @@ async fn a_still_external_view_is_at_rest() {
     let mut map =
         HeadlessMap::new(style, renderer, kernel, vec![Box::new(RenderPlugin)]).expect("map");
     map.schedule
-        .add_system_to_stage(RenderStageLabel::Queue, note_moved);
+        .add_system_to_stage(RenderStageLabel::Queue, note_moved)
+        .expect("schedule");
     // The same view twice: the map sees what it saw the frame before.
     map.run_external_frame(frame(16)).expect("first frame");
     map.run_external_frame(frame(32)).expect("second frame");
