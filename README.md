@@ -65,38 +65,20 @@ graphics are achievable using the current stack.
 - [WebGL with multithreading](https://webgl-multithreaded.demo.maplibre-rs.maplibre.org) - Does not work on Safari right now
 - [WebGPU](https://webgpu.demo.maplibre-rs.maplibre.org) - Only works with development versions of Safari TP, Firefox and Chrome
 
-## Current Features
+## Features
 
-* Runs on Linux, Android, iOS, macOS, Firefox, Safari (>=v16 due to (#166)[https://github.com/maplibre/maplibre-rs/issues/166]) and Chrome
-* Render a vector tile dataset
-* Simple navigation powered by winit
-* Multithreaded on all platforms
-* Querying feature data
-
-## Missing Features
-
-* Rendering Text
-* Per-Feature Rendering
-* Rendering:
-    * Labels
-    * Symbols
-    * Raster data
-    * 3D terrain
-    * Hill-shade (DEM)
-* Collision detection
-* Support for:
-    * GeoJSON
-* API for:
-    * TypeScript
-    * Swift
-    * Java/Kotlin
+* Runs on Linux, macOS, Windows, Android, iOS, and Firefox, Safari and Chrome with WebGPU or WebGL 2
+* MapLibre style documents: fill, line, symbol, circle, heatmap, fill-extrusion, raster, hillshade and color-relief layers
+* Vector, raster, raster-dem, GeoJSON and image sources; Mapbox Vector Tiles, MapLibre Tiles and PMTiles
+* Globe, Mercator and vertical-perspective projections with atmosphere and sky
+* 3D terrain, labels with collision detection, and the runtime style API
 
 ## Building & Running
 
 Clone the project
 
 ```bash
-git clone https://github.com/maplibre/maplibre-rs.git
+git clone https://github.com/luofang34/maplibre-rs.git
 ```
 
 Build and run it on a desktop

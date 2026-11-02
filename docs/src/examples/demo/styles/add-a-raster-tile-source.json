@@ -1,0 +1,26 @@
+{
+  "version": 8,
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "Tiles &copy; Esri"
+    }
+  },
+  "layers": [
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm"
+    }
+  ],
+  "center": [
+    -74.5,
+    40
+  ],
+  "zoom": 2
+}

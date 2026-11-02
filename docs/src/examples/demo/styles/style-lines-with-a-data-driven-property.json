@@ -1,0 +1,293 @@
+{
+  "version": 8,
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "sprite": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
+  "sources": {
+    "lines": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "color": "#F7455D"
+            },
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  -122.483696,
+                  37.833818
+                ],
+                [
+                  -122.483482,
+                  37.833174
+                ],
+                [
+                  -122.483396,
+                  37.8327
+                ],
+                [
+                  -122.483568,
+                  37.832056
+                ],
+                [
+                  -122.48404,
+                  37.831141
+                ],
+                [
+                  -122.48404,
+                  37.830497
+                ],
+                [
+                  -122.483482,
+                  37.82992
+                ],
+                [
+                  -122.483568,
+                  37.829548
+                ],
+                [
+                  -122.48507,
+                  37.829446
+                ],
+                [
+                  -122.4861,
+                  37.828802
+                ],
+                [
+                  -122.486958,
+                  37.82931
+                ]
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "color": "#33C9EB"
+            },
+            "geometry": {
+              "type": "LineString",
+              "coordinates": [
+                [
+                  -122.486958,
+                  37.82931
+                ],
+                [
+                  -122.487001,
+                  37.830802
+                ],
+                [
+                  -122.487516,
+                  37.831683
+                ],
+                [
+                  -122.488031,
+                  37.832158
+                ],
+                [
+                  -122.488889,
+                  37.832971
+                ],
+                [
+                  -122.489876,
+                  37.832632
+                ],
+                [
+                  -122.490434,
+                  37.832937
+                ],
+                [
+                  -122.49125,
+                  37.832429
+                ],
+                [
+                  -122.491636,
+                  37.832564
+                ],
+                [
+                  -122.492237,
+                  37.833378
+                ],
+                [
+                  -122.493782,
+                  37.833683
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "openmaptiles": {
+      "type": "vector",
+      "url": "https://tiles.openfreemap.org/planet"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f4f1ea"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": "#dfe9d0",
+        "fill-opacity": 0.7
+      }
+    },
+    {
+      "id": "park",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "park",
+      "paint": {
+        "fill-color": "#cfe5bb"
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a4cde8"
+      }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "waterway",
+      "paint": {
+        "line-color": "#a4cde8"
+      }
+    },
+    {
+      "id": "road",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.4
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          0.5,
+          18,
+          18
+        ]
+      }
+    },
+    {
+      "id": "boundary",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "boundary",
+      "filter": [
+        "==",
+        [
+          "get",
+          "admin_level"
+        ],
+        2
+      ],
+      "paint": {
+        "line-color": "#9e9cab",
+        "line-width": 1
+      }
+    },
+    {
+      "id": "lines",
+      "type": "line",
+      "source": "lines",
+      "paint": {
+        "line-width": 5,
+        "line-color": [
+          "get",
+          "color"
+        ]
+      }
+    },
+    {
+      "id": "road-label",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "transportation_name",
+      "minzoom": 13,
+      "layout": {
+        "symbol-placement": "line",
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": 12
+      },
+      "paint": {
+        "text-color": "#555",
+        "text-halo-color": "#fff",
+        "text-halo-width": 1.5
+      }
+    },
+    {
+      "id": "place-label",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          4,
+          11,
+          14,
+          18
+        ]
+      },
+      "paint": {
+        "text-color": "#333",
+        "text-halo-color": "#fff",
+        "text-halo-width": 1.5
+      }
+    }
+  ],
+  "center": [
+    -122.48383,
+    37.82882
+  ],
+  "zoom": 14.5
+}

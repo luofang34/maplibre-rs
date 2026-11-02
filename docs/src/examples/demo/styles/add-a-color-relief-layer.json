@@ -1,0 +1,68 @@
+{
+  "version": 8,
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "Tiles &copy; Esri"
+    },
+    "dem": {
+      "type": "raster-dem",
+      "url": "https://demotiles.maplibre.org/terrain-tiles/tiles.json",
+      "tileSize": 256
+    }
+  },
+  "layers": [
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm"
+    },
+    {
+      "id": "relief",
+      "type": "color-relief",
+      "source": "dem",
+      "paint": {
+        "color-relief-color": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "elevation"
+          ],
+          400,
+          "rgb(4, 0, 108)",
+          764.71,
+          "rgb(10, 21, 189)",
+          1129.41,
+          "rgb(24, 69, 240)",
+          1494.12,
+          "rgb(39, 144, 116)",
+          1858.82,
+          "rgb(111, 186, 5)",
+          2223.53,
+          "rgb(205, 216, 2)",
+          2588.24,
+          "rgb(251, 194, 14)",
+          2952.94,
+          "rgb(253, 128, 20)",
+          3317.65,
+          "rgb(243, 36, 13)",
+          3500,
+          "rgb(215, 5, 13)"
+        ],
+        "color-relief-opacity": 0.75
+      }
+    }
+  ],
+  "center": [
+    11.39085,
+    47.27574
+  ],
+  "zoom": 11
+}

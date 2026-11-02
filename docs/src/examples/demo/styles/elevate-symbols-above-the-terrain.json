@@ -1,0 +1,106 @@
+{
+  "version": 8,
+  "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "Tiles &copy; Esri"
+    },
+    "dem": {
+      "type": "raster-dem",
+      "url": "https://demotiles.maplibre.org/terrain-tiles/tiles.json",
+      "tileSize": 256
+    },
+    "peaks": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "name": "Nordkette"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.3798,
+                47.3031
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "name": "Innsbruck"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.4041,
+                47.2692
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "name": "Patscherkofel"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                11.463,
+                47.21
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm"
+    },
+    {
+      "id": "peak-label",
+      "type": "symbol",
+      "source": "peaks",
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Open Sans Semibold"
+        ],
+        "text-size": 18,
+        "symbol-height-offset": 200
+      },
+      "paint": {
+        "text-color": "#111",
+        "text-halo-color": "#fff",
+        "text-halo-width": 2
+      }
+    }
+  ],
+  "terrain": {
+    "source": "dem",
+    "exaggeration": 1.5
+  },
+  "center": [
+    11.39085,
+    47.27574
+  ],
+  "zoom": 11.5,
+  "pitch": 70,
+  "bearing": 20
+}

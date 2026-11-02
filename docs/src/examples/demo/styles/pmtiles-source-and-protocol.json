@@ -1,0 +1,50 @@
+{
+  "version": 8,
+  "sources": {
+    "firenze": {
+      "type": "vector",
+      "url": "pmtiles://https://pmtiles.io/protomaps(vector)ODbL_firenze.pmtiles"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f7f7f7"
+      }
+    },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "firenze",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": "steelblue"
+      }
+    },
+    {
+      "id": "roads",
+      "type": "line",
+      "source": "firenze",
+      "source-layer": "roads",
+      "paint": {
+        "line-color": "black"
+      }
+    },
+    {
+      "id": "mask",
+      "type": "fill",
+      "source": "firenze",
+      "source-layer": "mask",
+      "paint": {
+        "fill-color": "white"
+      }
+    }
+  ],
+  "center": [
+    11.2543435,
+    43.7672134
+  ],
+  "zoom": 13
+}
