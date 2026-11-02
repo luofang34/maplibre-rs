@@ -1,17 +1,19 @@
 {
   "version": 8,
-  "name": "Terrain demo",
+  "projection": {
+    "type": "globe"
+  },
   "sources": {
-    "osm": {
+    "imagery": {
       "type": "raster",
       "tiles": [
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
       ],
       "tileSize": 256,
-      "attribution": "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-      "maxzoom": 19
+      "maxzoom": 19,
+      "attribution": "Tiles &copy; Esri"
     },
-    "terrainSource": {
+    "dem": {
       "type": "raster-dem",
       "url": "https://demotiles.maplibre.org/terrain-tiles/tiles.json",
       "tileSize": 256
@@ -19,21 +21,14 @@
   },
   "layers": [
     {
-      "id": "background",
-      "type": "background",
-      "paint": {
-        "background-color": "#dfe6ea"
-      }
-    },
-    {
-      "id": "osm",
+      "id": "imagery",
       "type": "raster",
-      "source": "osm"
+      "source": "imagery"
     }
   ],
   "terrain": {
-    "source": "terrainSource",
-    "exaggeration": 1.5
+    "source": "dem",
+    "exaggeration": 1
   },
   "center": [
     11.39085,

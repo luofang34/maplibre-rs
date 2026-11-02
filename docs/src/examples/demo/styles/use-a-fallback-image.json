@@ -1,0 +1,207 @@
+{
+  "version": 8,
+  "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  "sprite": "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
+  "sources": {
+    "points": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "icon": "missing",
+              "name": "Fallback icon"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -77.03,
+                38.9
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "icon": "marker_11",
+              "name": "Named icon"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.94,
+                38.98
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "icon": "missing",
+              "name": "Fallback icon"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.85,
+                38.9
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "icon": "marker_11",
+              "name": "Named icon"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -76.76,
+                38.98
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "openmaptiles": {
+      "type": "vector",
+      "url": "https://tiles.openfreemap.org/planet"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f4f1ea"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": "#dfe9d0",
+        "fill-opacity": 0.7
+      }
+    },
+    {
+      "id": "park",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "park",
+      "paint": {
+        "fill-color": "#cfe5bb"
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a4cde8"
+      }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "waterway",
+      "paint": {
+        "line-color": "#a4cde8"
+      }
+    },
+    {
+      "id": "road",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.4
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          0.5,
+          18,
+          18
+        ]
+      }
+    },
+    {
+      "id": "boundary",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "boundary",
+      "filter": [
+        "==",
+        [
+          "get",
+          "admin_level"
+        ],
+        2
+      ],
+      "paint": {
+        "line-color": "#9e9cab",
+        "line-width": 1
+      }
+    },
+    {
+      "id": "points",
+      "type": "symbol",
+      "source": "points",
+      "layout": {
+        "icon-image": [
+          "coalesce",
+          [
+            "image",
+            [
+              "get",
+              "icon"
+            ]
+          ],
+          [
+            "image",
+            "monument_11"
+          ]
+        ],
+        "icon-size": 2,
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-offset": [
+          0,
+          1.2
+        ],
+        "text-anchor": "top",
+        "text-size": 13,
+        "icon-allow-overlap": true
+      }
+    }
+  ],
+  "center": [
+    -77,
+    38.9
+  ],
+  "zoom": 9
+}
