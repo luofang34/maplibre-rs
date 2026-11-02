@@ -31,6 +31,8 @@ pub struct InputController {
     shift_handler: ShiftHandler,
     query_handler: QueryHandler,
     debug_handler: DebugHandler,
+    /// Whether the last update moved the view, so the next frame may move it further.
+    moved_view: bool,
 }
 
 impl InputController {
@@ -45,7 +47,14 @@ impl InputController {
             shift_handler: ShiftHandler::new(speed, sensitivity),
             query_handler: QueryHandler::new(),
             debug_handler: DebugHandler::default(),
+            moved_view: false,
         }
+    }
+
+    /// Whether the last frame's update moved the view: a drag's inertia, a held key or a zoom
+    /// animation carries on into the next frame, which therefore has to be drawn.
+    pub fn moved_view(&self) -> bool {
+        self.moved_view
     }
 
     /// Leaves raw device events unconsumed; navigation is driven by window events.
@@ -141,7 +150,8 @@ impl UpdateState for InputController {
         // Only a view the handlers moved is lifted out of the terrain, as GL JS applies its
         // camera update after a handler changed the transform; elevation data arriving under a
         // resting camera leaves it where it is.
-        if view_snapshot(map_context) != before {
+        self.moved_view = view_snapshot(map_context) != before;
+        if self.moved_view {
             let MapContext {
                 style,
                 view_state,
