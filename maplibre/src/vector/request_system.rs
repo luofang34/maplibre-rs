@@ -260,7 +260,7 @@ impl<E: Environment, T: VectorTransferables> RequestSystem<E, T> {
         self.kernel
             .apc()
             .call(
-                Input::TrackedTileRequest {
+                Input {
                     coords,
                     style: worker_style,
                     attempt,
