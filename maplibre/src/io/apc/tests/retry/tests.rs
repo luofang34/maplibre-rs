@@ -13,6 +13,10 @@ async fn recovers(kind: Kind) {
     assert_eq!(test.source.requests(), 1);
     assert!(!test.loaded());
     assert_eq!(request_budget(&test.context.world), MAX_TILES_IN_FLIGHT);
+    assert!(
+        test.context.has_scheduled_retries(),
+        "an on-demand host keeps drawing until the retry is due"
+    );
     test.source.set(Response::Image);
     test.frame(999);
     test.receive().await;
@@ -35,6 +39,7 @@ async fn recovers(kind: Kind) {
         "stationary view retries after the deadline"
     );
     assert!(test.loaded(), "recovered source data reaches the map");
+    assert!(!test.context.has_scheduled_retries());
     test.frame(60000);
     test.receive().await;
     assert_eq!(

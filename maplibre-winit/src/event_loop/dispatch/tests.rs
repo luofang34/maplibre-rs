@@ -13,6 +13,10 @@ fn each_reason_alone_asks_for_a_frame() {
             ..NextFrame::default()
         },
         NextFrame {
+            retry: true,
+            ..NextFrame::default()
+        },
+        NextFrame {
             arrivals: true,
             ..NextFrame::default()
         },

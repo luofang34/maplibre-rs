@@ -126,6 +126,7 @@ where
         }
         let next = NextFrame {
             map: self.map.needs_redraw(),
+            retry: self.map.has_scheduled_retries(),
             arrivals: self.map.kernel().apc().has_arrivals(),
             input: self.input.moved_view(),
             counting_frames: self.max_frames.is_some(),
@@ -143,6 +144,8 @@ where
 struct NextFrame {
     /// The map changed, animates or still loads since the frame it drew.
     map: bool,
+    /// A failed tile waits for its retry deadline, which only a frame notices.
+    retry: bool,
     /// Worker results arrived that the next frame applies.
     arrivals: bool,
     /// Input moved the view, which inertia or a held key carries into the next frame.
@@ -153,7 +156,7 @@ struct NextFrame {
 
 impl NextFrame {
     fn wanted(self) -> bool {
-        self.map || self.arrivals || self.input || self.counting_frames
+        self.map || self.retry || self.arrivals || self.input || self.counting_frames
     }
 }
 
