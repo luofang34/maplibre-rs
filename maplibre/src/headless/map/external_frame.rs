@@ -50,7 +50,7 @@ impl HeadlessMap {
         input.view = ViewSource::External(frame.view);
         input.request_overscan = frame.request_overscan;
         self.map_context.renderer.resources.eye_depth_target = frame.depth;
-        let result = self.schedule.run_once(&mut self.map_context);
+        let result = crate::render::frame::run_frame(&mut self.schedule, &mut self.map_context);
         let resources = &mut self.map_context.renderer.resources;
         resources.eye_depth_target = None;
         // The graph runner takes the target after a frame; a failed frame must not leave it

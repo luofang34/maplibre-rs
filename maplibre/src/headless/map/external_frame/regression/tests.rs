@@ -12,7 +12,6 @@ use crate::{
     render::{
         camera::EyeFrustum,
         eventually::{Eventually, Eventually::Initialized},
-        frame_input::frame_input_system,
         RenderPlugin, RenderStageLabel,
     },
     style::Style,
@@ -94,13 +93,11 @@ async fn a_still_view_ingests_and_refines_terrain_once_per_frame() {
     )
     .expect("map");
     // Deterministic ingestion at the same stage as worker results, without network timing.
-    map.schedule.remove_stage(RenderStageLabel::Extract);
+    map.schedule.remove_stage(RenderStageLabel::Request);
     map.schedule.add_stage_before(
         RenderStageLabel::Prepare,
-        RenderStageLabel::Extract,
-        SystemStage::default()
-            .with_system(frame_input_system)
-            .with_system(ingest),
+        RenderStageLabel::Request,
+        SystemStage::default().with_system(ingest),
     );
     map.schedule
         .add_system_to_stage(RenderStageLabel::PhaseSort, observe);
@@ -143,7 +140,7 @@ async fn a_still_view_ingests_and_refines_terrain_once_per_frame() {
 
 #[tokio::test]
 async fn moving_and_stationary_external_views_both_request_visible_tiles() {
-    use crate::{projection::ProjectionType, render::frame_input::ViewSource, schedule::Stage};
+    use crate::{projection::ProjectionType, render::frame_input::ViewSource};
     let style: Style = serde_json::from_str(r#"{"version":8,"sources":{"v":{"type":"vector","tiles":["https://unused.example/{z}/{x}/{y}.pbf"]}},"layers":[]}"#).expect("style");
     let (kernel, renderer) = create_headless_renderer(128, 128, None)
         .await
@@ -172,11 +169,7 @@ async fn moving_and_stationary_external_views_both_request_visible_tiles() {
         .expect("initial pose");
     map.map_context.view_state.update_references();
     map.frame_input_mut().view = ViewSource::External(settled);
-    map.schedule
-        .get_stage_mut::<SystemStage>(&RenderStageLabel::Extract)
-        .expect("extract")
-        .run(&mut map.map_context)
-        .expect("moving frame");
+    run_input_and_requests(&mut map).expect("moving frame");
     assert!(!map.view_state().eye_settled());
     assert!(
         !map.world().tiles.tiles.is_empty(),
@@ -184,11 +177,7 @@ async fn moving_and_stationary_external_views_both_request_visible_tiles() {
     );
     map.map_context.world.tiles.clear();
     map.map_context.view_state.update_references();
-    map.schedule
-        .get_stage_mut::<SystemStage>(&RenderStageLabel::Extract)
-        .expect("extract")
-        .run(&mut map.map_context)
-        .expect("stationary frame");
+    run_input_and_requests(&mut map).expect("stationary frame");
     assert!(map.view_state().eye_settled());
     assert!(!map.view_state().did_camera_change());
     assert!(
@@ -311,4 +300,18 @@ async fn a_still_external_view_is_at_rest() {
         [false],
         "the view did not move, so drapes catch up at full pace: {moved:?}"
     );
+}
+
+/// Applies the frame input and runs the request systems, without drawing.
+fn run_input_and_requests(
+    map: &mut crate::headless::map::HeadlessMap,
+) -> crate::schedule::StageResult {
+    for label in [RenderStageLabel::Input, RenderStageLabel::Request] {
+        let stage = map
+            .schedule
+            .get_stage_mut::<SystemStage>(&label)
+            .expect("stage");
+        crate::schedule::Stage::run(stage, &mut map.map_context)?;
+    }
+    Ok(())
 }
